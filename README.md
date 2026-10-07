@@ -80,19 +80,22 @@ UI icons use `lucide-react`, including the theme-scoped Astryx control glyphs. T
 
 This app is single-owner; other Clerk accounts receive `403`. To intentionally transfer API ownership, first back up the SQLite database, then run `pnpm --filter @kinsen/api db:transfer-owner -- --to-user-id <clerk-user-id>` using the target account's Clerk user ID. This changes only the `app_owner` binding; it preserves budget tables and revokes API access for the previous account. Browser-local IndexedDB ownership is separate. Multi-user budgets require a separate tenant-isolation design.
 
-**Settings** is in the app navigation. Choose **Light**, **Dark**, or **System** in Settings or the top-bar **Appearance** menu. System follows device appearance changes automatically; an explicit choice overrides the device setting. Appearance preferences apply immediately and are saved on this device, not synced to other devices:
+**Settings** is in the app navigation, with a dedicated category submenu: **Appearance**, **Layout & motion**, **Calendar**, and **Dashboard**. Desktop shows the submenu beside the active panel; narrow screens use a two-column category menu above it. Categories support direct links such as `/settings?section=calendar` and `/settings?section=dashboard`, with browser back/forward navigation. Account & data stays separate from workspace preferences. Choose **Light**, **Dark**, or **System** in Appearance or the top-bar **Appearance** menu. System follows device appearance changes automatically; an explicit choice overrides the device setting. Preferences apply immediately and are saved on this device, not synced to other devices:
 
 - **Accent color:** Evergreen, Ocean, Lilac, Terracotta, Marigold, Rose, Slate, or Indigo. Navigation highlights follow the selected accent too.
 - **Surface palette:** Warm ivory, cool blue gray, or neutral gray backgrounds and panels, independently of the accent. Each supports light and dark mode.
 - **Corners:** Rounded or crisp corners for workspace panels and Astryx controls.
 - **Heading style:** Editorial serif or modern sans-serif headings throughout the workspace.
-- **Layout and behavior:** Compact spacing, motion effects, and calendar week start remain available.
+- **Layout & motion:** Compact spacing and motion effects, respecting the device’s reduced-motion preference.
+- **Calendar:** Sunday or Monday week start, with a shortcut to the Calendar view.
 
 Color preferences also apply to forms, command search, and Clerk account/sign-in surfaces. Existing saved preferences retain their values; newly added controls default to warm surfaces, rounded corners, and editorial headings. These controls do not alter budget or asset data. Account data controls are linked from the Settings page.
 
-**Dashboard sections** in Settings controls the Overview page (`/`). Use **Customize dashboard** on the Overview to reach these controls, then toggle Budget summary, Your assets, Category pulse, Still to pay, or Recent activity. Changes apply immediately and are saved on this device across reloads; all sections start visible. Safe to Spend and budget health always remain visible. A single visible category/commitments panel fills its row. Hiding a section only changes the dashboard view, not budget calculations or saved data; the dedicated pages remain available.
+**Dashboard** in the Settings submenu controls the Overview page (`/`). **Customize dashboard** on the Overview opens this category directly. Toggle Budget summary, Your assets, Category pulse, Still to pay, or Recent activity. Changes apply immediately and are saved on this device across reloads; all sections start visible. Safe to Spend and budget health always remain visible. A single visible category/commitments panel fills its row. Hiding a section only changes the dashboard view, not budget calculations or saved data; the dedicated pages remain available.
 
 **Account settings** is available from the Settings page. **Reset all account data** deletes the server budget and the current browser's budget, pending-sync, asset, and liability data while keeping the Clerk sign-in active. Other devices clear their local copies on their next sync; the reset requires the API to be reachable. **Deactivate account** bans the Clerk user from signing in, but retains Kinsen data. Only an administrator can reactivate that Clerk account; reset data separately if it must be erased.
+
+Deleting a transaction, commitment, asset or liability activity record, or an unused category requires in-app confirmation; transactions can be restored for 10 seconds after deletion. Asset and liability archives also require confirmation.
 
 ## Asset tracking
 

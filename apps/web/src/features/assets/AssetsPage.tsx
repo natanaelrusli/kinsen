@@ -16,6 +16,7 @@ import { Icon } from '../../shared/components/Icon'
 import { PageHeader } from '../../shared/components/Primitives'
 import { AssetLineChart } from './AssetLineChart'
 import { AssetForm, AssetValuationForm, LiabilityActivityForm, LiabilityForm, LiabilityPaymentForm, TransferForm } from './AssetForms'
+import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 
 const STALE_AFTER_DAYS = 30
 type RangeKind = 'MONTH' | 'QUARTER' | 'YEAR' | 'CUSTOM'
@@ -84,15 +85,13 @@ function latestLedgerEntries(entries: AssetEntry[], today: DateOnly): Map<string
 function AssetRow({ asset, value, valuation, ledgerEntry, today, onUpdateValue }: { asset: AssetAccount; value: number; valuation: AssetValuation | null; ledgerEntry: AssetEntry | null; today: DateOnly; onUpdateValue: (asset: AssetAccount) => void }) {
   const updatedDate = valuation?.asOfDate ?? ledgerEntry?.date ?? asset.createdAt
   const stale = asset.balanceMode === 'VALUATION' && (!valuation || daysSince(today, valuation.asOfDate) > STALE_AFTER_DAYS)
-  return <article className="asset-row">
-    <Link className="asset-row-main" color="inherit" href={`/assets/${encodeURIComponent(asset.id)}`}>
-      <span className="asset-row-mark"><Icon name={asset.balanceMode === 'LEDGER' ? 'wallet' : 'assets'} size={19} /></span>
-      <span className="asset-row-name"><strong>{asset.name}</strong><small>{assetTypeLabels[asset.type]} · {asset.institution}</small></span>
-      <span className="asset-row-value"><strong>{formatIdr(value)}</strong><small>{asset.balanceMode === 'LEDGER' ? `${formatIdr(value)} native` : valuation ? nativeAmount(valuation.nativeAmountMinor, valuation.nativeCurrency) : 'Native value not entered'}</small></span>
-      <span className="asset-row-date"><small>As of {formatDate(updatedDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>{stale && <span className="stale-badge">{valuation ? 'Stale estimate' : 'Value needed'}</span>}{valuation && <span className="manual-badge">Manual estimate</span>}</span>
-    </Link>
-    {asset.balanceMode === 'VALUATION' && <Button label={`Update value for ${asset.name}`} className="icon-button asset-row-update" variant="ghost" type="button" aria-label={`Update value for ${asset.name}`} onClick={() => onUpdateValue(asset)} icon={<Icon name="edit" size={17} />} isIconOnly />}
-  </article>
+  return <li className="asset-row"><Link className="asset-row-main" color="inherit" href={`/assets/${encodeURIComponent(asset.id)}`}>
+    <span className="asset-row-mark"><Icon name={asset.balanceMode === 'LEDGER' ? 'wallet' : 'assets'} size={19} /></span>
+    <span className="asset-row-name"><strong>{asset.name}</strong><small>{assetTypeLabels[asset.type]} · {asset.institution}</small></span>
+    <span className="asset-row-value"><strong>{formatIdr(value)}</strong><small>{asset.balanceMode === 'LEDGER' ? `${formatIdr(value)} native` : valuation ? nativeAmount(valuation.nativeAmountMinor, valuation.nativeCurrency) : 'Native value not entered'}</small></span>
+    <span className="asset-row-date"><small>As of {formatDate(updatedDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>{stale && <span className="stale-badge">{valuation ? 'Stale estimate' : 'Value needed'}</span>}{valuation && <span className="manual-badge">Manual estimate</span>}</span>
+  </Link>
+  {asset.balanceMode === 'VALUATION' && <Button label={`Update value for ${asset.name}`} className="icon-button asset-row-update" variant="ghost" type="button" aria-label={`Update value for ${asset.name}`} onClick={() => onUpdateValue(asset)} icon={<Icon name="edit" size={17} />} isIconOnly />}</li>
 }
 
 function nativeAmount(valueMinor: number, currency: string): string {
@@ -130,6 +129,8 @@ export function AssetsPage() {
   const [selectedLiabilityActivity, setSelectedLiabilityActivity] = useState<LiabilityEntry | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
   const [expandedLiabilityId, setExpandedLiabilityId] = useState<string | null>(null)
+  const [confirmingArchiveLiability, setConfirmingArchiveLiability] = useState<LiabilityAccount | null>(null)
+  const [confirmingLiabilityActivity, setConfirmingLiabilityActivity] = useState<LiabilityEntry | null>(null)
 
   const start = range === 'CUSTOM' ? customStart : rangeStart(today, range)
   const end = range === 'CUSTOM' ? customEnd : today
@@ -197,20 +198,12 @@ export function AssetsPage() {
   }
 
   async function archiveLiability(liability: LiabilityAccount) {
-    const linkedRecords = data.liabilityEntries.filter((entry) => entry.liabilityId === liability.id).length
-    const balance = liabilityBalances.get(liability.id) ?? 0
-    const suffix = linkedRecords ? ` ${linkedRecords} dated record${linkedRecords === 1 ? '' : 's'} will remain in history.` : ''
-    const outstanding = balance > 0 ? ` Its outstanding ${formatIdr(balance)} balance will no longer be included in current net worth.` : ''
-    if (!window.confirm(`Archive “${liability.name}”?${outstanding}${suffix}`)) return
     setPageError(null)
     try { await runMutation((useCases) => useCases.archiveLiability(liability.id, today)) }
     catch (reason) { setPageError(reason instanceof Error ? reason.message : 'Liability could not be archived.') }
   }
 
-
   async function deleteLiabilityActivity(entry: LiabilityEntry) {
-    const detail = entry.assetEntryId ? ' Its paired cash-account debit will also be removed.' : ''
-    if (!window.confirm(`Delete this liability adjustment?${detail} The balance and net worth will be recalculated.`)) return
     setPageError(null)
     try { await runMutation((useCases) => useCases.deleteLiabilityActivity(entry.id)) }
     catch (reason) { setPageError(reason instanceof Error ? reason.message : 'Liability adjustment could not be deleted.') }
@@ -218,20 +211,28 @@ export function AssetsPage() {
 
   if (status === 'idle' || status === 'loading') return <Spinner className="loading-state" label="Loading assets saved on this device" size="md" />
   if (status === 'error') return <div className="asset-load-error" role="alert"><h2>Assets could not be loaded</h2><p>{error ?? 'Local storage is unavailable.'}</p><Button label="Try again" className="button button-secondary" variant="secondary" type="button" onClick={() => void initialize()} /></div>
+  const confirmingLiabilityBalance = confirmingArchiveLiability ? liabilityBalances.get(confirmingArchiveLiability.id) ?? 0 : 0
+  const confirmingLiabilityRecordCount = confirmingArchiveLiability ? liabilityEntriesByAccount.get(confirmingArchiveLiability.id)?.length ?? 0 : 0
+  const confirmingArchiveDescription = [
+    confirmingLiabilityBalance > 0 ? `Its outstanding ${formatIdr(confirmingLiabilityBalance)} balance will no longer be included in current net worth.` : null,
+    confirmingLiabilityRecordCount > 0 ? `${confirmingLiabilityRecordCount} dated record${confirmingLiabilityRecordCount === 1 ? '' : 's'} will remain in history.` : null,
+  ].filter((detail): detail is string => detail !== null).join(' ') || 'This liability will no longer be active.'
 
   return <div className="assets-page">
     <PageHeader eyebrow="FINANCIAL POSITION" title="Assets" description="See what you own, where it is held, and when each value was last updated. Asset values never increase Safe to Spend Today." actions={<>
       <Button label="Update value" className="button button-outline" variant="secondary" type="button" onClick={() => setPickerOpen(true)} isDisabled={!valuationAssets.length} icon={<Icon name="edit" size={17} />}></Button>
       <Button label="Add asset" className="button button-primary" variant="primary" type="button" onClick={() => { setEditingAsset(null); setAssetDialog(true) }} icon={<Icon name="plus" size={17} />}></Button>
     </>} />
-    <div className="asset-local-note" role="status"><span className="storage-dot" />Saved locally on this device · manual estimates only · no live pricing</div>
+    <p className="asset-local-note"><span className="storage-dot" aria-hidden="true" />Saved locally on this device · manual estimates only · no live pricing</p>
     {(pageError || error) && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{pageError ?? error}</p>}
-    <section className="asset-summary-grid" aria-label="Current financial position">
-      <article className="asset-total-card"><span>Total assets</span><strong>{formatIdr(position.totalAssets)}</strong><small>Active assets · IDR</small></article>
-      {activeLiabilities.length > 0 && <article className="asset-stat-card"><span>Net worth</span><strong>{formatIdr(position.netWorth ?? 0)}</strong><small>Total assets minus liabilities</small></article>}
-      <article className="asset-stat-card"><span>Daily-use cash</span><strong>{formatIdr(position.dailyUseCash)}</strong><small>Purpose-tagged for everyday use</small></article>
-      <article className="asset-stat-card"><span>Protected savings</span><strong>{formatIdr(position.protectedSavings)}</strong><small>Kept separate from spending money</small></article>
-      <article className="asset-stat-card"><span>Investments</span><strong>{formatIdr(position.investmentValue)}</strong><small>Manual values; not live market prices</small></article>
+    <section aria-label="Current financial position">
+      <dl className="asset-summary-grid">
+        <div className="asset-total-card"><dt>Total assets</dt><dd><strong>{formatIdr(position.totalAssets)}</strong><small>Active assets · IDR</small></dd></div>
+        {activeLiabilities.length > 0 && <div className="asset-stat-card"><dt>Net worth</dt><dd><strong>{formatIdr(position.netWorth ?? 0)}</strong><small>Total assets minus liabilities</small></dd></div>}
+        <div className="asset-stat-card"><dt>Daily-use cash</dt><dd><strong>{formatIdr(position.dailyUseCash)}</strong><small>Purpose-tagged for everyday use</small></dd></div>
+        <div className="asset-stat-card"><dt>Protected savings</dt><dd><strong>{formatIdr(position.protectedSavings)}</strong><small>Kept separate from spending money</small></dd></div>
+        <div className="asset-stat-card"><dt>Investments</dt><dd><strong>{formatIdr(position.investmentValue)}</strong><small>Manual values; not live market prices</small></dd></div>
+      </dl>
     </section>
 
     <section className="section-block asset-history-section" aria-labelledby="asset-history-title">
@@ -270,15 +271,15 @@ export function AssetsPage() {
 
     <section className="section-block asset-list-section" aria-labelledby="asset-list-title">
       <div className="section-title-row"><div><p className="eyebrow">YOUR HOLDINGS</p><h2 id="asset-list-title">Accounts and assets</h2></div><div className="asset-section-actions"><Button label="Record transfer" className="button button-small button-outline" variant="secondary" type="button" onClick={() => setTransferOpen(true)} isDisabled={cashAssets.length < 2} icon={<Icon name="arrow-right" size={15} />}></Button><Button label="Add asset" className="button button-small button-primary" variant="primary" type="button" onClick={() => { setEditingAsset(null); setAssetDialog(true) }} icon={<Icon name="plus" size={15} />}></Button></div></div>
-      {activeAssets.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="wallet" size={23} /></span>} title="No assets recorded" description="Start with an opening balance for a bank, e-wallet, savings pool, investment, or other asset. No sample balances are preloaded." actions={<Button label="Add an asset" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditingAsset(null); setAssetDialog(true) }} icon={<Icon name="plus" size={16} />}></Button>} /> : byType.map(([type, accounts]) => <div className="asset-class-group" key={type}><h3>{assetTypeLabels[type]} <small>{accounts.length}</small></h3><div className="asset-rows">{accounts.map((asset) => <AssetRow key={asset.id} asset={asset} value={values.get(asset.id) ?? 0} valuation={currentValuations.get(asset.id) ?? null} ledgerEntry={ledgerEntriesByAsset.get(asset.id) ?? null} today={today} onUpdateValue={(item) => setValuationAsset(item)} />)}</div></div>)}
+      {activeAssets.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon" aria-hidden="true"><Icon name="wallet" size={23} /></span>} title="No assets recorded" description="Start with an opening balance for a bank, e-wallet, savings pool, investment, or other asset. No sample balances are preloaded." actions={<Button label="Add an asset" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditingAsset(null); setAssetDialog(true) }} icon={<Icon name="plus" size={16} />}></Button>} /> : byType.map(([type, accounts]) => <div className="asset-class-group" key={type}><h3>{assetTypeLabels[type]} <small>{accounts.length}</small></h3><ul className="asset-rows">{accounts.map((asset) => <AssetRow key={asset.id} asset={asset} value={values.get(asset.id) ?? 0} valuation={currentValuations.get(asset.id) ?? null} ledgerEntry={ledgerEntriesByAsset.get(asset.id) ?? null} today={today} onUpdateValue={(item) => setValuationAsset(item)} />)}</ul></div>)}
     </section>
 
     <section className="section-block liability-section" aria-labelledby="liabilities-title">
       <div className="section-title-row"><div><p className="eyebrow">DEBT AND SETTLEMENTS</p><h2 id="liabilities-title">Liabilities</h2></div><Button label="Add liability" className="button button-small button-outline" variant="secondary" type="button" onClick={() => { setEditingLiability(null); setLiabilityDialog(true) }} icon={<Icon name="plus" size={15} />}></Button></div>
-      {activeLiabilities.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} title="No liabilities recorded" description="Add card, paylater, installment, or loan balances to include debt in your net-worth figure." actions={<Button label="Add a liability" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditingLiability(null); setLiabilityDialog(true) }} icon={<Icon name="plus" size={16} />}></Button>} /> : liabilitiesByType.map(([type, accounts]) => <div className="liability-type-group" key={type}><h3>{liabilityTypeLabels[type]}</h3>{accounts.map((liability) => {
+      {activeLiabilities.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon" aria-hidden="true"><Icon name="receipt" size={23} /></span>} title="No liabilities recorded" description="Add card, paylater, installment, or loan balances to include debt in your net-worth figure." actions={<Button label="Add a liability" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditingLiability(null); setLiabilityDialog(true) }} icon={<Icon name="plus" size={16} />}></Button>} /> : liabilitiesByType.map(([type, accounts]) => <div className="liability-type-group" key={type}><h3>{liabilityTypeLabels[type]}</h3>{accounts.map((liability) => {
         const balance = liabilityBalances.get(liability.id) ?? 0
         const latestEntry = liabilityEntriesByAccount.get(liability.id)?.[0]
-        return <article className="liability-row" key={liability.id}><div className="liability-row-main"><strong>{liability.name}</strong><span>{liability.institution}{latestEntry ? ` · updated ${formatDate(latestEntry.date, { day: 'numeric', month: 'short' })}` : ''}</span></div><strong className="liability-row-value">{formatIdr(balance)}</strong><div className="asset-row-actions"><Button label={`Edit ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${liability.name}`} onClick={() => { setEditingLiability(liability); setLiabilityDialog(true) }} icon={<Icon name="edit" size={16} />} isIconOnly /><Button label={`Record payment for ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Record payment for ${liability.name}`} isDisabled={balance <= 0 || cashAssets.length === 0} onClick={() => setPaymentLiability(liability)} icon={<Icon name="arrow-right" size={16} />} isIconOnly /><Button label={`Add balance change for ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Add balance change for ${liability.name}`} onClick={() => { setLiabilityActivity(liability); setSelectedLiabilityActivity(null) }} icon={<Icon name="plus" size={16} />} isIconOnly /><Button label={`Archive ${liability.name}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Archive ${liability.name}`} onClick={() => void archiveLiability(liability)} icon={<Icon name="trash" size={16} />} isIconOnly /></div></article>
+        return <article className="liability-row" key={liability.id}><div className="liability-row-main"><strong>{liability.name}</strong><span>{liability.institution}{latestEntry ? ` · updated ${formatDate(latestEntry.date, { day: 'numeric', month: 'short' })}` : ''}</span></div><strong className="liability-row-value">{formatIdr(balance)}</strong><div className="asset-row-actions"><Button label={`Edit ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${liability.name}`} onClick={() => { setEditingLiability(liability); setLiabilityDialog(true) }} icon={<Icon name="edit" size={16} />} isIconOnly /><Button label={`Record payment for ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Record payment for ${liability.name}`} isDisabled={balance <= 0 || cashAssets.length === 0} onClick={() => setPaymentLiability(liability)} icon={<Icon name="arrow-right" size={16} />} isIconOnly /><Button label={`Add balance change for ${liability.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Add balance change for ${liability.name}`} onClick={() => { setLiabilityActivity(liability); setSelectedLiabilityActivity(null) }} icon={<Icon name="plus" size={16} />} isIconOnly /><Button label={`Archive ${liability.name}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Archive ${liability.name}`} onClick={() => setConfirmingArchiveLiability(liability)} icon={<Icon name="trash" size={16} />} isIconOnly /></div></article>
       })}</div>)}
       {activeLiabilities.map((liability) => {
         const entries = liabilityEntriesByAccount.get(liability.id) ?? []
@@ -293,7 +294,7 @@ export function AssetsPage() {
             return <article className="liability-activity-row" key={entry.id}>
               <div><strong>{label}</strong><span>{formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}{entry.assetEntryId ? ' · paid from a tracked asset' : ''}</span>{entry.note && <small>{entry.note}</small>}</div>
               <strong className={impact < 0 ? 'asset-change is-negative' : 'asset-change'}>{impact > 0 ? '+' : impact < 0 ? '−' : ''}{formatIdr(Math.abs(impact))}</strong>
-              {entry.kind !== 'OPENING_BALANCE' && entry.kind !== 'PAYMENT' && <div className="asset-row-actions">{editable && <Button label={`Edit ${label.toLowerCase()} on ${entry.date}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${label.toLowerCase()} on ${entry.date}`} onClick={() => { setLiabilityActivity(liability); setSelectedLiabilityActivity(entry) }} icon={<Icon name="edit" size={15} />} isIconOnly />}<Button label={`Delete ${label.toLowerCase()} on ${entry.date}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${label.toLowerCase()} on ${entry.date}`} onClick={() => void deleteLiabilityActivity(entry)} icon={<Icon name="trash" size={15} />} isIconOnly /></div>}
+              {entry.kind !== 'OPENING_BALANCE' && entry.kind !== 'PAYMENT' && <div className="asset-row-actions">{editable && <Button label={`Edit ${label.toLowerCase()} on ${entry.date}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${label.toLowerCase()} on ${entry.date}`} onClick={() => { setLiabilityActivity(liability); setSelectedLiabilityActivity(entry) }} icon={<Icon name="edit" size={15} />} isIconOnly />}<Button label={`Delete ${label.toLowerCase()} on ${entry.date}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${label.toLowerCase()} on ${entry.date}`} onClick={() => setConfirmingLiabilityActivity(entry)} icon={<Icon name="trash" size={15} />} isIconOnly /></div>}
             </article>
           })}</div>}
         </div>
@@ -310,5 +311,33 @@ export function AssetsPage() {
     <LiabilityForm open={liabilityDialog} initial={editingLiability} today={today} saving={saving} onClose={() => { setLiabilityDialog(false); setEditingLiability(null) }} onSave={saveLiability} />
     {liabilityActivity && <LiabilityActivityForm open liability={liabilityActivity} initial={selectedLiabilityActivity} today={today} saving={saving} onClose={() => { setLiabilityActivity(null); setSelectedLiabilityActivity(null) }} onSave={(entry) => runMutation((useCases) => useCases.saveLiabilityActivity(entry))} />}
     {paymentLiability && <LiabilityPaymentForm open liability={paymentLiability} accounts={cashAssets} assetBalances={assetBalances} maxLiabilityBalance={liabilityBalances.get(paymentLiability.id) ?? 0} today={today} saving={saving} onClose={() => setPaymentLiability(null)} onSave={(input) => runMutation((useCases) => useCases.payLiability({ liabilityId: paymentLiability.id, ...input }))} />}
+    <ConfirmationDialog
+      open={confirmingLiabilityActivity !== null}
+      title={confirmingLiabilityActivity ? `Delete liability adjustment on ${formatDate(confirmingLiabilityActivity.date, { day: 'numeric', month: 'short', year: 'numeric' })}?` : 'Delete liability adjustment?'}
+      description={confirmingLiabilityActivity?.assetEntryId
+        ? 'Its paired cash-account debit will also be removed. The balance and net worth will be recalculated.'
+        : 'The balance and net worth will be recalculated.'}
+      confirmLabel="Delete adjustment"
+      onClose={() => setConfirmingLiabilityActivity(null)}
+      onConfirm={() => {
+        if (!confirmingLiabilityActivity) return
+        const entry = confirmingLiabilityActivity
+        setConfirmingLiabilityActivity(null)
+        void deleteLiabilityActivity(entry)
+      }}
+    />
+    <ConfirmationDialog
+      open={confirmingArchiveLiability !== null}
+      title={confirmingArchiveLiability ? `Archive “${confirmingArchiveLiability.name}”?` : 'Archive liability?'}
+      description={confirmingArchiveDescription}
+      confirmLabel="Archive liability"
+      onClose={() => setConfirmingArchiveLiability(null)}
+      onConfirm={() => {
+        if (!confirmingArchiveLiability) return
+        const liability = confirmingArchiveLiability
+        setConfirmingArchiveLiability(null)
+        void archiveLiability(liability)
+      }}
+    />
   </div>
 }

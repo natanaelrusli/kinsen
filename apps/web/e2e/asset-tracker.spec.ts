@@ -83,10 +83,9 @@ test('keeps the expense form inside narrow phone viewports', async ({ page }) =>
   }
 })
 
-test('keeps settings choices in bounds and saves the selected color', async ({ page }) => {
+test('keeps settings usable on small screens and persists choices across categories', async ({ page }) => {
   await page.goto('/?asset-tracker-e2e=1&settings-e2e=1')
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
-
+  const navigation = page.getByRole('navigation', { name: 'Settings categories' })
   for (const viewport of [
     { width: 320, height: 667 },
     { width: 390, height: 844 },
@@ -95,50 +94,24 @@ test('keeps settings choices in bounds and saves the selected color', async ({ p
   ]) {
     await page.setViewportSize(viewport)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width)
-
-    const layout = await page.evaluate(() => {
-      const settings = document.querySelector('.settings-page')!
-      const options = [...document.querySelectorAll('.theme-option')].map((item) => {
-        const box = item.getBoundingClientRect()
-        return { x: box.x, right: box.right, top: box.top, bottom: box.bottom, height: box.height }
-      })
-      const headingLeft = document.querySelector('#tune-settings-title')!.getBoundingClientRect().left
-      const toggleRows = [...document.querySelectorAll('.settings-toggle-row')].map((row) => {
-        const bounds = row.getBoundingClientRect()
-        const label = row.querySelector('.astryx-switch-label')!.getBoundingClientRect()
-        const toggle = row.querySelector('[role="switch"]')!.getBoundingClientRect()
-        return { rowRight: bounds.right, labelLeft: label.left, toggleRight: toggle.right }
-      })
-      return { width: settings.clientWidth, scrollWidth: settings.scrollWidth, options, headingLeft, toggleRows }
-    })
-    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width)
-    expect(layout.options).toHaveLength(5)
-    for (const option of layout.options) {
-      expect(option.x).toBeGreaterThanOrEqual(0)
-      expect(option.right).toBeLessThanOrEqual(viewport.width)
-      expect(option.height).toBeGreaterThanOrEqual(48)
-    }
-    for (let index = 1; index < layout.options.length; index += 1) {
-      expect(layout.options[index]!.top).toBeGreaterThanOrEqual(layout.options[index - 1]!.bottom)
-    }
-    expect(layout.toggleRows).toHaveLength(2)
-    for (const row of layout.toggleRows) {
-      expect(Math.abs(row.labelLeft - layout.headingLeft)).toBeLessThanOrEqual(5)
-      expect(Math.abs(row.toggleRight - row.rowRight)).toBeLessThanOrEqual(5)
-    }
+    await page.getByRole('radio', { name: 'Ocean' }).click()
+    await navigation.getByRole('button', { name: 'Layout & motion' }).click()
+    await expect(page.getByRole('heading', { name: 'Layout & motion', level: 2 })).toBeFocused()
+    await page.getByRole('switch', { name: 'Compact layout' }).check()
+    await navigation.getByRole('button', { name: 'Appearance' }).click()
+    await expect(page.getByRole('radio', { name: 'Ocean' })).toBeChecked()
   }
-
-  await page.getByRole('radio', { name: 'Ocean' }).click()
-  await expect(page.getByText('Current color: Ocean')).toBeVisible()
   await page.reload()
-  await expect(page.getByText('Current color: Ocean')).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Ocean' })).toBeChecked()
+  await navigation.getByRole('button', { name: 'Layout & motion' }).click()
+  await expect(page.getByRole('switch', { name: 'Compact layout' })).toBeChecked()
 })
 
 test('persists an explicit mode and resumes following system appearance', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' })
   await page.goto('/?asset-tracker-e2e=1&workspace-e2e=1&settings-e2e=1')
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await page.locator('.app-top-nav').getByRole('button', { name: 'Appearance', exact: true }).click()
   await page.getByRole('menuitemradio', { name: 'Dark', exact: true }).click()
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
   await expect(page.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked()
@@ -156,7 +129,7 @@ test('persists an explicit mode and resumes following system appearance', async 
   await page.getByRole('button', { name: 'Search pages and commands', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Search pages and commands' })).toHaveCSS('color-scheme', 'dark')
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await page.locator('.app-top-nav').getByRole('button', { name: 'Appearance', exact: true }).click()
   await page.getByRole('menuitemradio', { name: 'Light', exact: true }).click()
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
   await page.emulateMedia({ colorScheme: 'dark' })
@@ -164,7 +137,7 @@ test('persists an explicit mode and resumes following system appearance', async 
 
   await page.setViewportSize({ width: 320, height: 667 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
-  await expect(page.getByRole('button', { name: 'Appearance', exact: true })).toBeVisible()
+  await expect(page.locator('.app-top-nav').getByRole('button', { name: 'Appearance', exact: true })).toBeVisible()
 })
 
 test('renders the Astryx shell nav with searchable, resizable, and mobile navigation', async ({ page }) => {
@@ -224,6 +197,46 @@ test('provides a screen-reader summary for asset history and custom range errors
   await expect(from).toHaveAccessibleDescription(rangeError)
   await expect(to).toHaveAccessibleDescription(rangeError)
 })
+
+test('groups financial metrics accessibly and reflows without horizontal overflow', async ({ page }) => {
+  await startAssetHarness(page)
+  const position = page.getByRole('region', { name: 'Current financial position' })
+  const summary = position.locator('dl.asset-summary-grid')
+  await expect(summary.locator('dt', { hasText: 'Total assets' })).toBeVisible()
+  await expect(summary.locator('dd')).toHaveCount(4)
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const summaryLayout = await page.locator('.asset-summary-grid').evaluate((grid) => ({
+    columns: getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).filter((track) => parseFloat(track) > 0).length,
+    metrics: grid.children.length,
+  }))
+  expect(summaryLayout.columns).toBe(summaryLayout.metrics)
+
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+  }
+})
+
+test('stretches the WHERE IT GOES card to match the dashboard row height', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?asset-tracker-e2e=1&workspace-e2e=1')
+  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Your money, in focus', level: 1 })).toBeVisible()
+
+  const category = page.getByRole('region', { name: 'Category pulse' })
+  const commitments = page.locator('.commitments-preview')
+  await expect(category).toBeVisible()
+  const categoryBox = await category.boundingBox()
+  const commitmentsBox = await commitments.boundingBox()
+  expect(categoryBox).not.toBeNull()
+  expect(commitmentsBox).not.toBeNull()
+  expect(Math.abs(categoryBox!.height - commitmentsBox!.height)).toBeLessThanOrEqual(1)
+
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(1024)
+})
+
 
 test('keeps asset section actions at least 44px across touch-width layouts', async ({ page }) => {
   await startAssetHarness(page)

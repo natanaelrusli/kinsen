@@ -7,6 +7,7 @@ import type { Transaction } from '@kinsen/budget-domain'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { TransactionForm } from './TransactionForm'
 import { TransactionRow } from './TransactionRow'
@@ -21,6 +22,7 @@ export function TransactionsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [query, setQuery] = useState('')
+  const [confirmingTransaction, setConfirmingTransaction] = useState<Transaction | null>(null)
   const { error, message: deleteMessage, undoTransaction, deleting, deleteTransaction, undoDelete } = useUndoableTransactionDelete(runMutation)
 
   const transactions = useMemo(() => (snapshot?.transactions ?? []).slice().sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id)), [snapshot?.transactions])
@@ -41,10 +43,23 @@ export function TransactionsPage() {
         {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
         {deleteMessage && <div className="undo-notice"><span role="status">{deleteMessage}</span>{undoTransaction && <Button label="Undo" className="button button-small button-quiet" variant="ghost" type="button" onClick={() => void undoDelete()} isDisabled={deleting} />}</div>}
         {transactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} title="No expenses recorded" description="Add an actual expense when money leaves your account. Safe to spend recalculates as soon as it is saved." actions={<Button label="Add an expense" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={17} />}></Button>} /> : matchingTransactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="activity" size={23} /></span>} title="No matches" description="Try another description or category." /> : <div className="transaction-list">
-          {matchingTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={snapshot.categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={(item) => void deleteTransaction(item)} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
+          {matchingTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={snapshot.categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={setConfirmingTransaction} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
         </div>}
       </section>
       <TransactionForm open={formOpen} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
+      <ConfirmationDialog
+        open={confirmingTransaction !== null}
+        title={confirmingTransaction ? `Delete “${confirmingTransaction.description}”?` : 'Delete expense?'}
+        description="You can undo this deletion for 10 seconds."
+        confirmLabel="Delete expense"
+        onClose={() => setConfirmingTransaction(null)}
+        onConfirm={() => {
+          if (!confirmingTransaction) return
+          const transaction = confirmingTransaction
+          setConfirmingTransaction(null)
+          void deleteTransaction(transaction)
+        }}
+      />
     </div>
   )
 }

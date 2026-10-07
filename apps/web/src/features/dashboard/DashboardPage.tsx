@@ -1,6 +1,7 @@
 import { Button } from '@astryxdesign/core/Button'
-import { EmptyState } from '@astryxdesign/core/EmptyState'
+import { Card } from '@astryxdesign/core/Card'
 import { ProgressBar } from '@astryxdesign/core/ProgressBar'
+import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { Spinner } from '@astryxdesign/core/Spinner'
 import { Stack } from '@astryxdesign/core/Stack'
 import { useMemo, useState, type CSSProperties } from 'react'
@@ -11,6 +12,7 @@ import { formatDate, formatLongDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { TransactionForm } from '../transactions/TransactionForm'
 import { TransactionRow } from '../transactions/TransactionRow'
 import { useUndoableTransactionDelete } from '../transactions/useUndoableTransactionDelete'
@@ -42,6 +44,7 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
+  const [confirmingTransaction, setConfirmingTransaction] = useState<Transaction | null>(null)
   const { error, message: deleteMessage, undoTransaction, deleting, deleteTransaction, undoDelete } = useUndoableTransactionDelete(runMutation)
   const recentTransactions = useMemo(() => (snapshot?.transactions ?? []).slice().sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id)).slice(0, 4), [snapshot?.transactions])
   if (status === 'loading') return <Spinner className="loading-state" label="Loading your budget" size="md" />
@@ -57,7 +60,7 @@ export function DashboardPage() {
     <div className="dashboard-page">
       <PageHeader eyebrow="YOUR DAILY PLAN" title="Your money, in focus" description={`${formatLongDate(overview.today)} · one clear number for what you can spend today.`} actions={<><Button label="Budget settings" className="button button-outline" variant="secondary" type="button" aria-label="Budget settings" onClick={() => navigate('/budget')} icon={<Icon name="wallet" size={17} />}></Button><Button label="New expense" className="button button-primary" variant="primary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={18} />}></Button></>} />
       <Stack direction="horizontal" justify="end" paddingBlockEnd={3}>
-        <Button label="Customize dashboard" variant="ghost" href="/settings" icon={<Icon name="settings" />} />
+        <Button label="Customize dashboard" variant="ghost" href="/settings?section=dashboard" icon={<Icon name="settings" />} />
       </Stack>
       {snapshot.period?.isSample && <div className="starter-ribbon"><span className="starter-spark"><Icon name="wallet" size={16} /></span><span><strong>Starter budget</strong> — replace these examples with your own plan when you’re ready.</span><Link color="inherit" href="/budget">Set up my budget <Icon name="arrow" size={15} /></Link></div>}
       {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
@@ -95,8 +98,8 @@ export function DashboardPage() {
       </section>}
 
       {(dashboardSections.categories || dashboardSections.commitments) && <Stack gap={0} className={dashboardSections.categories && dashboardSections.commitments ? 'dashboard-content-grid' : undefined}>
-        {dashboardSections.categories && <section className="section-block category-section">
-          <div className="section-heading"><div><p className="eyebrow">WHERE IT GOES</p><h2>Category pulse</h2></div><Link className="text-link" color="inherit" href="/budget">Edit allocations <Icon name="arrow" size={15} /></Link></div>
+        {dashboardSections.categories && <Card className="category-section" role="region" aria-labelledby="category-pulse-title" padding={5}>
+          <div className="section-heading"><div><p className="eyebrow">WHERE IT GOES</p><h2 id="category-pulse-title">Category pulse</h2></div><Link className="text-link" color="inherit" href="/budget">Edit allocations <Icon name="arrow" size={15} /></Link></div>
           {overview.categorySummaries.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="wallet" size={23} /></span>} title="Add your categories" description="Set flexible and planned categories to give your budget structure." actions={<Button label="Set up budget" className="button button-secondary" variant="secondary" href="/budget" />} /> : <div className="category-pulse-list">
             {overview.categorySummaries.map(({ category, spent, committed, remainingAllocation, overspent }) => <article className="category-pulse" key={category.id}>
               <div className="category-pulse-heading"><span className="category-color-chip" style={{ backgroundColor: category.color }} /><div><strong>{category.name}</strong><span>{category.mode === 'DAILY' ? 'Daily' : category.mode === 'PERIOD' ? 'Period' : 'Scheduled'} · {category.bucket.toLowerCase()}</span></div><strong className={overspent ? 'money-danger' : ''}>{formatIdr(spent)}</strong></div>
@@ -104,24 +107,37 @@ export function DashboardPage() {
               <div className="category-pulse-footer"><span>{overspent ? `Over allocation by ${formatIdr(-remainingAllocation)}` : `${formatIdr(Math.max(0, remainingAllocation))} allocation left`}</span>{committed > 0 && <span>{formatIdr(committed)} committed</span>}</div>
             </article>)}
           </div>}
-        </section>}
+        </Card>}
 
         {dashboardSections.commitments && <section className="section-block commitments-preview">
           <div className="section-heading"><div><p className="eyebrow">COMING UP</p><h2>Still to pay</h2></div><Link className="text-link" color="inherit" href="/commitments">All commitments <Icon name="arrow" size={15} /></Link></div>
           {upcoming.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="check" size={23} /></span>} title="Nothing waiting" description="Your planned expenses will appear here, including overdue amounts." actions={<Link color="inherit" href="/commitments" className="text-link">Plan an expense <Icon name="arrow" size={15} /></Link>} /> : <div className="upcoming-list">
             {upcoming.map((occurrence) => <article className="upcoming-item" key={occurrence.id}><span className="upcoming-date"><strong>{formatDate(occurrence.dueDate, { day: 'numeric' })}</strong><small>{formatDate(occurrence.dueDate, { month: 'short' })}</small></span><div className="upcoming-main"><strong>{occurrence.name}</strong><span>{occurrence.dueDate < overview.today ? 'Overdue · still reserved' : `Due ${formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })}`}</span></div><strong className="upcoming-amount">{formatIdr(occurrence.outstandingAmount)}</strong></article>)}
           </div>}
-          <div className="upcoming-footer"><span>Period budget left after actual spending<small>Before commitments and protected reserve</small></span><strong>{formatIdr(remainingBudget)}</strong></div>
+          <div className="upcoming-footer"><span>Period budget left after actual spending</span><strong>{formatIdr(remainingBudget)}</strong></div>
         </section>}
       </Stack>}
 
       {dashboardSections.activity && <section className="section-block recent-section">
         <div className="section-heading"><div><p className="eyebrow">JUST RECORDED</p><h2>Recent activity</h2></div><Link className="text-link" color="inherit" href="/activity">View all activity <Icon name="arrow" size={15} /></Link></div>
         {recentTransactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} title="No expenses yet" description="Add spending when it happens; the safe-to-spend number will update instantly." actions={<Button label="Add an expense" className="button button-secondary" variant="secondary" type="button" onClick={() => setFormOpen(true)} icon={<Icon name="plus" size={17} />}></Button>} /> : <div className="transaction-list dashboard-transactions">
-          {recentTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={snapshot.categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={(item) => void deleteTransaction(item)} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
+          {recentTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={snapshot.categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={setConfirmingTransaction} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
         </div>}
       </section>}
       <TransactionForm open={formOpen} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
+      <ConfirmationDialog
+        open={confirmingTransaction !== null}
+        title={confirmingTransaction ? `Delete “${confirmingTransaction.description}”?` : 'Delete expense?'}
+        description="You can undo this deletion for 10 seconds."
+        confirmLabel="Delete expense"
+        onClose={() => setConfirmingTransaction(null)}
+        onConfirm={() => {
+          if (!confirmingTransaction) return
+          const transaction = confirmingTransaction
+          setConfirmingTransaction(null)
+          void deleteTransaction(transaction)
+        }}
+      />
     </div>
   )
 }

@@ -17,6 +17,7 @@ import { Grid } from '@astryxdesign/core/Grid'
 import { Stack } from '@astryxdesign/core/Stack'
 import { FormWizard } from '../../shared/components/FormWizard'
 import { useBudgetStore } from '../../shared/state/budget-store'
+import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 
 const dateSchema = z.string().refine((value) => {
   try { parseDateOnly(value); return true } catch { return false }
@@ -132,6 +133,7 @@ export function BudgetPage() {
   const saving = useBudgetStore((state) => state.saving)
   const navigate = useNavigate()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [categoryToRemove, setCategoryToRemove] = useState<{ index: number; name: string } | null>(null)
   const fallback = useMemo(() => createSampleSnapshot(localToday()), [])
   const currentPeriod = snapshot?.period ?? fallback.period!
   const currentCategories = snapshot?.categories.length ? snapshot.categories : fallback.categories
@@ -269,7 +271,7 @@ export function BudgetPage() {
                       <Stack className="category-editor-top" direction="horizontal" align="center" gap={2}>
                         <span className="category-color-chip" style={{ backgroundColor: values.categories?.[index]?.color ?? field.color }} />
                         <AstryxTextField control={control} name={`categories.${index}.name`} label="Category name" isLabelHidden maxLength={40} className="field category-name-field" />
-                        <Button className="icon-button danger-icon" label={`Remove ${values.categories?.[index]?.name || 'category'}`} isIconOnly icon={<Icon name="trash" size={17} />} variant="destructive" type="button" isDisabled={used || fields.length === 1} tooltip={used ? 'This category has saved activity and cannot be removed.' : 'Remove category'} onClick={() => remove(index)} />
+                        <Button className="icon-button danger-icon" label={`Remove ${values.categories?.[index]?.name || 'category'}`} isIconOnly icon={<Icon name="trash" size={17} />} variant="destructive" type="button" isDisabled={used || fields.length === 1} tooltip={used ? 'This category has saved activity and cannot be removed.' : 'Remove category'} onClick={() => setCategoryToRemove({ index, name: values.categories?.[index]?.name || 'category' })} />
                       </Stack>
                       <Grid className="category-settings-grid" columns={{ minWidth: 160, max: 2 }} gap={2}>
                         <AstryxSelectField control={control} name={`categories.${index}.mode`} label="Mode" options={[{ value: 'DAILY', label: 'Daily' }, { value: 'PERIOD', label: 'Period' }, { value: 'SCHEDULED', label: 'Scheduled' }]} onValueChange={(value) => { if (value === 'DAILY') setValue(`categories.${index}.bucket`, 'FLEXIBLE'); if (value === 'SCHEDULED') setValue(`categories.${index}.bucket`, 'PLANNED'); if (value !== 'SCHEDULED') setValue(`categories.${index}.defaultCadence`, '') }} className="field" />
@@ -291,6 +293,18 @@ export function BudgetPage() {
         onSubmit={onSubmit}
         submitLabel="Save budget"
         isSaving={saving}
+      />
+      <ConfirmationDialog
+        open={categoryToRemove !== null}
+        title={categoryToRemove ? `Remove “${categoryToRemove.name}”?` : 'Remove category?'}
+        description="This removes the category from the budget form. Adjust category allocations to match the budget before saving."
+        confirmLabel="Remove category"
+        onClose={() => setCategoryToRemove(null)}
+        onConfirm={() => {
+          if (!categoryToRemove) return
+          remove(categoryToRemove.index)
+          setCategoryToRemove(null)
+        }}
       />
     </main>
   )

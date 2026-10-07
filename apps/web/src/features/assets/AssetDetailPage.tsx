@@ -13,6 +13,7 @@ import { formatDate, localToday } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { PageHeader } from '../../shared/components/Primitives'
+import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { AssetLineChart } from './AssetLineChart'
 import { AssetActivityForm, AssetForm, AssetValuationForm, TransferForm } from './AssetForms'
 
@@ -97,6 +98,8 @@ export function AssetDetailPage() {
   const [valuationDialog, setValuationDialog] = useState(false)
   const [transferDialog, setTransferDialog] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
+  const [confirmingActivity, setConfirmingActivity] = useState<AssetEntry | null>(null)
+  const [confirmingArchive, setConfirmingArchive] = useState(false)
   useEffect(() => { void initialize() }, [initialize])
 
   const asset = data.assets.find((item) => item.id === assetId)
@@ -138,16 +141,12 @@ export function AssetDetailPage() {
     setEditingEntry(null)
   }
   async function deleteActivity(entry: AssetEntry) {
-    if (!window.confirm(`Delete this ${activityLabel(entry).toLowerCase()}? The balance and history will be recalculated.`)) return
     setPageError(null)
     try { await runMutation((useCases) => useCases.deleteActivity(entry.id)) }
     catch (reason) { setPageError(reason instanceof Error ? reason.message : 'Activity could not be deleted.') }
   }
   async function archive() {
     if (!asset) return
-    const linkedRecords = assetEntries.length + assetValuations.length
-    const detail = linkedRecords ? ` ${linkedRecords} dated records will remain in historical reports.` : ''
-    if (!window.confirm(`Archive “${asset.name}”?${detail}`)) return
     setPageError(null)
     try { await runMutation((useCases) => useCases.archiveAsset(asset.id, today)) }
     catch (reason) { setPageError(reason instanceof Error ? reason.message : 'Asset could not be archived.') }
@@ -160,6 +159,7 @@ export function AssetDetailPage() {
   const showNative = currentValuation !== null
   const paidFromTransaction = (entry: AssetEntry) => entry.budgetTransactionId ? transactionsById.get(entry.budgetTransactionId) : undefined
   const canEditEntry = (entry: AssetEntry) => entry.kind !== 'OPENING_BALANCE' && entry.kind !== 'TRANSFER_IN' && entry.kind !== 'TRANSFER_OUT' && !entry.budgetTransactionId && !entry.liabilityEntryId
+  const linkedRecordCount = assetEntries.length + assetValuations.length
 
   return <div className="asset-detail-page">
     <Link className="asset-back-link" color="inherit" href="/assets"><Icon name="arrow-left" size={17} />All assets</Link>
@@ -170,7 +170,7 @@ export function AssetDetailPage() {
       <Button label="Edit details" icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setAssetDialog(true)} />
       {asset.balanceMode === 'VALUATION' ? <Button label="Update value" icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setValuationDialog(true)} /> : <Button label="Add activity" icon={<Icon name="plus" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => { setEditingEntry(null); setActivityDialog(true) }} />}
       {asset.balanceMode === 'LEDGER' && <Button label="Transfer" icon={<Icon name="arrow-right" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setTransferDialog(true)} isDisabled={activeAccounts.length < 2} />}
-      <Button label="Archive" icon={<Icon name="trash" size={17} />} className="button button-quiet" variant="ghost" type="button" onClick={() => void archive()} />
+      <Button label="Archive" icon={<Icon name="trash" size={17} />} className="button button-quiet" variant="ghost" type="button" onClick={() => setConfirmingArchive(true)} />
     </> : undefined} />
 
     <section className="asset-detail-hero" aria-label="Current asset value">
@@ -193,7 +193,7 @@ export function AssetDetailPage() {
               <span className={`asset-timeline-marker${amountForEntry(entry) < 0 ? ' is-outflow' : ''}`} aria-hidden="true"><Icon name={entry.kind === 'TRANSFER_IN' || entry.kind === 'TRANSFER_OUT' ? 'arrow-right' : 'receipt'} size={16} /></span>
               <div className="asset-timeline-main"><strong>{activityLabel(entry)}</strong><span>{formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}{entry.note ? ` · ${entry.note}` : ''}</span>{linkedTransaction && <small>Paid from · {linkedTransaction.description}</small>}{linkedLiability && <small>Liability settlement · {linkedLiability.name}; not a second expense</small>}{entry.transferId && <small>Internal transfer · paired record</small>}</div>
               <strong className={amountForEntry(entry) < 0 ? 'timeline-amount is-negative' : 'timeline-amount'}>{amountForEntry(entry) > 0 ? '+' : ''}{formatIdr(amountForEntry(entry))}</strong>
-              {!archived && canEditEntry(entry) && <div className="row-actions"><Button label={`Edit ${activityLabel(entry)}`} icon={<Icon name="edit" size={16} />} isIconOnly className="icon-button" variant="ghost" type="button" onClick={() => { setEditingEntry(entry); setActivityDialog(true) }} /><Button label={`Delete ${activityLabel(entry)}`} icon={<Icon name="trash" size={16} />} isIconOnly className="icon-button danger-icon" variant="destructive" type="button" onClick={() => void deleteActivity(entry)} /></div>}
+              {!archived && canEditEntry(entry) && <div className="row-actions"><Button label={`Edit ${activityLabel(entry)}`} icon={<Icon name="edit" size={16} />} isIconOnly className="icon-button" variant="ghost" type="button" onClick={() => { setEditingEntry(entry); setActivityDialog(true) }} /><Button label={`Delete ${activityLabel(entry)}`} icon={<Icon name="trash" size={16} />} isIconOnly className="icon-button danger-icon" variant="destructive" type="button" onClick={() => setConfirmingActivity(entry)} /></div>}
             </article>
           }
           const item = record.valuation
@@ -211,5 +211,31 @@ export function AssetDetailPage() {
     {asset.balanceMode === 'LEDGER' && <AssetActivityForm open={activityDialog} asset={asset} initial={editingEntry} today={today} saving={saving} onClose={() => { setActivityDialog(false); setEditingEntry(null) }} onSave={saveActivity} />}
     {asset.balanceMode === 'VALUATION' && <AssetValuationForm open={valuationDialog} asset={asset} latest={valuation} today={today} saving={saving} onClose={() => setValuationDialog(false)} onSave={(value) => runMutation((useCases) => useCases.saveValuation(value))} />}
     {asset.balanceMode === 'LEDGER' && <TransferForm open={transferDialog} accounts={activeAccounts} sourceAssetId={asset.id} today={today} saving={saving} onClose={() => setTransferDialog(false)} onSave={(input) => runMutation((useCases) => useCases.transfer(input))} />}
+    <ConfirmationDialog
+      open={confirmingActivity !== null}
+      title={confirmingActivity ? `Delete ${activityLabel(confirmingActivity).toLowerCase()}?` : 'Delete activity?'}
+      description="The balance and history will be recalculated."
+      confirmLabel="Delete activity"
+      onClose={() => setConfirmingActivity(null)}
+      onConfirm={() => {
+        if (!confirmingActivity) return
+        const entry = confirmingActivity
+        setConfirmingActivity(null)
+        void deleteActivity(entry)
+      }}
+    />
+    <ConfirmationDialog
+      open={confirmingArchive}
+      title={`Archive “${asset.name}”?`}
+      description={linkedRecordCount > 0
+        ? `${linkedRecordCount} dated record${linkedRecordCount === 1 ? '' : 's'} will remain in historical reports.`
+        : 'This asset will no longer appear among active holdings.'}
+      confirmLabel="Archive asset"
+      onClose={() => setConfirmingArchive(false)}
+      onConfirm={() => {
+        setConfirmingArchive(false)
+        void archive()
+      }}
+    />
   </div>
 }
