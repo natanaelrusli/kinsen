@@ -1,0 +1,22 @@
+{
+  "name": "kinsen-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @kinsen/budget-domain build && pnpm --parallel --filter @kinsen/api --filter @kinsen/web dev",
+    "dev:api": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/api dev",
+    "dev:web": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter @kinsen/web test:e2e",
+    "db:migrate": "pnpm --filter @kinsen/api db:migrate",
+    "start": "pnpm --filter @kinsen/api start"
+  },
+  "devDependencies": {
+    "@astryxdesign/cli": "^0.6.5"
+  }
+}

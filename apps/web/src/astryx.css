@@ -1,0 +1,6 @@
+@layer reset, astryx-base, astryx-theme, app;
+
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
+@import "./shared/styles.css" layer(app);
