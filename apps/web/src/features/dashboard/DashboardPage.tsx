@@ -2,6 +2,7 @@ import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { ProgressBar } from '@astryxdesign/core/ProgressBar'
 import { Spinner } from '@astryxdesign/core/Spinner'
+import { Stack } from '@astryxdesign/core/Stack'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Link } from '@astryxdesign/core/Link'
 import { useNavigate } from 'react-router-dom'
@@ -17,6 +18,7 @@ import { useBudgetStore } from '../../shared/state/budget-store'
 import { calculateFinancialPosition } from '@kinsen/budget-domain'
 import { localToday } from '../../shared/format/date'
 import { useAssetStore } from '../../shared/state/asset-store'
+import { useSettingsStore } from '../../shared/state/settings-store'
 
 const healthCopy = {
   ON_TRACK: { label: 'On track', detail: 'Your reserve and current plans fit inside this period.', icon: 'check' as const },
@@ -34,6 +36,7 @@ export function DashboardPage() {
   const runMutation = useBudgetStore((state) => state.runMutation)
   const assetStatus = useAssetStore((state) => state.status)
   const assetData = useAssetStore((state) => state.data)
+  const dashboardSections = useSettingsStore((state) => state.dashboardSections)
   const assetPosition = useMemo(() => calculateFinancialPosition(assetData, overview?.today ?? localToday()), [assetData, overview?.today])
   const hasActiveLiabilities = assetData.liabilities.some((liability) => !liability.archivedAt)
   const navigate = useNavigate()
@@ -53,6 +56,9 @@ export function DashboardPage() {
   return (
     <div className="dashboard-page">
       <PageHeader eyebrow="YOUR DAILY PLAN" title="Your money, in focus" description={`${formatLongDate(overview.today)} · one clear number for what you can spend today.`} actions={<><Button label="Budget settings" className="button button-outline" variant="secondary" type="button" aria-label="Budget settings" onClick={() => navigate('/budget')} icon={<Icon name="wallet" size={17} />}></Button><Button label="New expense" className="button button-primary" variant="primary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={18} />}></Button></>} />
+      <Stack direction="horizontal" justify="end" paddingBlockEnd={3}>
+        <Button label="Customize dashboard" variant="ghost" href="/settings" icon={<Icon name="settings" />} />
+      </Stack>
       {snapshot.period?.isSample && <div className="starter-ribbon"><span className="starter-spark"><Icon name="wallet" size={16} /></span><span><strong>Starter budget</strong> — replace these examples with your own plan when you’re ready.</span><Link color="inherit" href="/budget">Set up my budget <Icon name="arrow" size={15} /></Link></div>}
       {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
       {deleteMessage && <div className="undo-notice"><span role="status">{deleteMessage}</span>{undoTransaction && <Button label="Undo" className="button button-small button-quiet" variant="ghost" type="button" onClick={() => void undoDelete()} isDisabled={deleting} />}</div>}
@@ -70,12 +76,12 @@ export function DashboardPage() {
         </section>
       </div>
 
-      <section className="stat-grid three-stats dashboard-stats" aria-label="Budget summary">
+      {dashboardSections.summary && <section className="stat-grid three-stats dashboard-stats" aria-label="Budget summary">
         <article className="stat-card"><span className="stat-label">Actual spending</span><strong>{formatIdr(overview.actualSpent)}</strong><span className="stat-detail">{period ? `of ${formatIdr(period.totalAmount)} total` : 'This period'}</span><ProgressBar className="app-progress-bar" value={period ? overview.actualSpent / period.totalAmount * 100 : 0} label="Actual spending as a portion of total budget" style={{'--color-accent': 'var(--green)'} as CSSProperties} isLabelHidden /></article>
         <article className="stat-card"><span className="stat-label">Outstanding commitments</span><strong>{formatIdr(overview.outstandingCommitments)}</strong><span className="stat-detail">Only unpaid amounts are reserved</span><Link color="inherit" className="stat-link" href="/commitments">See what’s coming <Icon name="arrow" size={14} /></Link></article>
         <article className="stat-card"><span className="stat-label">Protected reserve</span><strong>{formatIdr(overview.protectedReserve)}</strong><span className="stat-detail">Kept out of today’s spending number</span><span className="reserve-status"><Icon name="check" size={14} />Protected</span></article>
-      </section>
-      {assetStatus === 'ready' && <section className="section-block dashboard-assets-summary" aria-labelledby="dashboard-assets-title">
+      </section>}
+      {dashboardSections.assets && assetStatus === 'ready' && <section className="section-block dashboard-assets-summary" aria-labelledby="dashboard-assets-title">
         <div className="section-heading"><div><p className="eyebrow">FINANCIAL POSITION</p><h2 id="dashboard-assets-title">Your assets</h2></div><Link className="text-link" color="inherit" href="/assets">View assets <Icon name="arrow" size={15} /></Link></div>
         <div className="dashboard-assets-metrics">
           <article><span>Total assets</span><strong>{formatIdr(assetPosition.totalAssets)}</strong></article>
@@ -88,8 +94,8 @@ export function DashboardPage() {
         <p className="dashboard-assets-note">Separate from Safe to Spend Today.</p>
       </section>}
 
-      <div className="dashboard-content-grid">
-        <section className="section-block category-section">
+      {(dashboardSections.categories || dashboardSections.commitments) && <Stack gap={0} className={dashboardSections.categories && dashboardSections.commitments ? 'dashboard-content-grid' : undefined}>
+        {dashboardSections.categories && <section className="section-block category-section">
           <div className="section-heading"><div><p className="eyebrow">WHERE IT GOES</p><h2>Category pulse</h2></div><Link className="text-link" color="inherit" href="/budget">Edit allocations <Icon name="arrow" size={15} /></Link></div>
           {overview.categorySummaries.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="wallet" size={23} /></span>} title="Add your categories" description="Set flexible and planned categories to give your budget structure." actions={<Button label="Set up budget" className="button button-secondary" variant="secondary" href="/budget" />} /> : <div className="category-pulse-list">
             {overview.categorySummaries.map(({ category, spent, committed, remainingAllocation, overspent }) => <article className="category-pulse" key={category.id}>
@@ -98,23 +104,23 @@ export function DashboardPage() {
               <div className="category-pulse-footer"><span>{overspent ? `Over allocation by ${formatIdr(-remainingAllocation)}` : `${formatIdr(Math.max(0, remainingAllocation))} allocation left`}</span>{committed > 0 && <span>{formatIdr(committed)} committed</span>}</div>
             </article>)}
           </div>}
-        </section>
+        </section>}
 
-        <section className="section-block commitments-preview">
+        {dashboardSections.commitments && <section className="section-block commitments-preview">
           <div className="section-heading"><div><p className="eyebrow">COMING UP</p><h2>Still to pay</h2></div><Link className="text-link" color="inherit" href="/commitments">All commitments <Icon name="arrow" size={15} /></Link></div>
           {upcoming.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="check" size={23} /></span>} title="Nothing waiting" description="Your planned expenses will appear here, including overdue amounts." actions={<Link color="inherit" href="/commitments" className="text-link">Plan an expense <Icon name="arrow" size={15} /></Link>} /> : <div className="upcoming-list">
             {upcoming.map((occurrence) => <article className="upcoming-item" key={occurrence.id}><span className="upcoming-date"><strong>{formatDate(occurrence.dueDate, { day: 'numeric' })}</strong><small>{formatDate(occurrence.dueDate, { month: 'short' })}</small></span><div className="upcoming-main"><strong>{occurrence.name}</strong><span>{occurrence.dueDate < overview.today ? 'Overdue · still reserved' : `Due ${formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })}`}</span></div><strong className="upcoming-amount">{formatIdr(occurrence.outstandingAmount)}</strong></article>)}
           </div>}
           <div className="upcoming-footer"><span>Period budget left after actual spending<small>Before commitments and protected reserve</small></span><strong>{formatIdr(remainingBudget)}</strong></div>
-        </section>
-      </div>
+        </section>}
+      </Stack>}
 
-      <section className="section-block recent-section">
+      {dashboardSections.activity && <section className="section-block recent-section">
         <div className="section-heading"><div><p className="eyebrow">JUST RECORDED</p><h2>Recent activity</h2></div><Link className="text-link" color="inherit" href="/activity">View all activity <Icon name="arrow" size={15} /></Link></div>
         {recentTransactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} title="No expenses yet" description="Add spending when it happens; the safe-to-spend number will update instantly." actions={<Button label="Add an expense" className="button button-secondary" variant="secondary" type="button" onClick={() => setFormOpen(true)} icon={<Icon name="plus" size={17} />}></Button>} /> : <div className="transaction-list dashboard-transactions">
           {recentTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={snapshot.categories.find((category) => category.id === transaction.categoryId)?.name ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={(item) => void deleteTransaction(item)} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
         </div>}
-      </section>
+      </section>}
       <TransactionForm open={formOpen} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
     </div>
   )

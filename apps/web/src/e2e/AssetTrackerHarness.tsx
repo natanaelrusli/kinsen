@@ -1,4 +1,5 @@
 import { Button } from '@astryxdesign/core/Button'
+import { Stack } from '@astryxdesign/core/Stack'
 import { useEffect, useState } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { createSampleSnapshot } from '@kinsen/budget-domain'
@@ -9,9 +10,14 @@ import { AssetsPage } from '../features/assets/AssetsPage'
 import { AssetDetailPage } from '../features/assets/AssetDetailPage'
 import { BudgetPage } from '../features/budget/BudgetPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { DashboardPage } from '../features/dashboard/DashboardPage'
+import { CalendarPage } from '../features/calendar/CalendarPage'
+import { CommitmentsPage } from '../features/commitments/CommitmentsPage'
+import { TransactionsPage } from '../features/transactions/TransactionsPage'
 import { AppShellChrome } from '../shared/components/AppShell'
 import { useAssetStore } from '../shared/state/asset-store'
 import { useBudgetStore } from '../shared/state/budget-store'
+import { useSettingsStore } from '../shared/state/settings-store'
 import { formatIdr } from '../shared/format/money'
 import { localToday } from '../shared/format/date'
 
@@ -19,6 +25,7 @@ const today = localToday()
 
 const search = new URLSearchParams(window.location.search)
 const sidebarPreviewE2E = search.get('sidebar-e2e') === '1'
+const workspaceE2E = search.get('workspace-e2e') === '1'
 const initialPath =
   sidebarPreviewE2E || search.get('settings-e2e') === '1'
     ? '/settings'
@@ -82,8 +89,12 @@ function AssetTrackerFlow() {
         <Button label="Open test expense" variant="secondary" type="button" onClick={() => setExpenseOpen(true)} />
       </section>
       <Routes>
-        <Route path="/budget" element={<div className="page-content"><BudgetPage /></div>} />
-        <Route path="/settings" element={<div className="page-content"><SettingsPage /></div>} />
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/commitments" element={<CommitmentsPage />} />
+        <Route path="/activity" element={<TransactionsPage />} />
+        <Route path="/budget" element={workspaceE2E ? <BudgetPage /> : <Stack className="page-content"><BudgetPage /></Stack>} />
+        <Route path="/settings" element={workspaceE2E ? <SettingsPage /> : <Stack className="page-content"><SettingsPage /></Stack>} />
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/assets/:assetId" element={<AssetDetailPage />} />
       </Routes>
@@ -95,6 +106,8 @@ function AssetTrackerFlow() {
 export function AssetTrackerHarness() {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const layoutDensity = useSettingsStore((state) => state.layoutDensity)
+  const playfulMotion = useSettingsStore((state) => state.playfulMotion)
   useEffect(() => {
     let active = true
     if (sidebarPreviewE2E) {
@@ -114,23 +127,38 @@ export function AssetTrackerHarness() {
     return (
       <MemoryRouter initialEntries={[initialPath]}>
         <AppShellChrome
-          themeColor="default"
-          layoutDensity="comfortable"
-          playfulMotion
+          layoutDensity={layoutDensity}
+          playfulMotion={playfulMotion}
           online
           syncStatus="LOCAL"
           error={null}
           onRetry={() => window.location.reload()}
-          accountControl={<div className="topbar-account"><span className="sr-only">Test account</span></div>}>
-          <div className="page-content sidebar-preview-content">
+          accountControl={<Stack><span className="sr-only">Test account</span></Stack>}>
+          <Stack className="page-content sidebar-preview-content">
             <p className="eyebrow">SHELL NAVIGATION</p>
             <h1>Choose a destination</h1>
-            <p className="page-description">Use the resizable rail, menu bar, or command search to navigate.</p>
-          </div>
+            <p className="page-description">Use the resizable rail or command search to navigate.</p>
+          </Stack>
         </AppShellChrome>
       </MemoryRouter>
     )
 
+  }
+  if (workspaceE2E) {
+    return (
+      <MemoryRouter initialEntries={[initialPath]}>
+        <AppShellChrome
+          layoutDensity={layoutDensity}
+          playfulMotion={playfulMotion}
+          online
+          syncStatus="LOCAL"
+          error={null}
+          onRetry={() => window.location.reload()}
+          accountControl={<Stack><span className="sr-only">Test account</span></Stack>}>
+          <Stack className="page-content"><AssetTrackerFlow /></Stack>
+        </AppShellChrome>
+      </MemoryRouter>
+    )
   }
   return <MemoryRouter initialEntries={[initialPath]}><main><AssetTrackerFlow /></main></MemoryRouter>
 }

@@ -20,6 +20,14 @@ pnpm dev
 
 `pnpm dev` starts the API on `127.0.0.1:3001` and the Vite frontend on `127.0.0.1:5173`. Vite proxies `/api` to the API. The API creates its SQLite database on first startup.
 
+To access both the frontend and API from another device on a trusted network, configure Clerk as described below, then run:
+
+```sh
+pnpm dev:network
+```
+
+Open `http://<this-machine's-LAN-IP>:3001` on the other device. The frontend serves `/api/*` on the same address and proxies it to the API on `127.0.0.1:3002`; for example, `http://<this-machine's-LAN-IP>:3001/api/health` checks backend readiness. Only frontend port `3001` needs to be reachable through the host firewall. `pnpm dev` retains its local-only ports (`5173` frontend, `3001` API). Do not expose Vite's development server to the public internet.
+
 ```sh
 pnpm test       # domain, web and API behavior tests
 pnpm build      # all workspace packages
@@ -27,14 +35,16 @@ pnpm test:e2e   # Clerk controls, budget guard, asset accounting and offline UI 
 pnpm db:migrate # apply SQLite migrations without starting the API
 ```
 
-`pnpm start` starts only the API. For a local production preview, build first, then run `pnpm start` and `pnpm --filter @kinsen/web preview` in separate terminals; the preview listens on `127.0.0.1:4173`. A deployed frontend must route same-origin `/api` requests to the API.
+`pnpm start` starts only the API. For a local production preview, build first, then run `pnpm start` and `pnpm --filter @kinsen/web preview` in separate terminals; the preview listens on `127.0.0.1:4173`. Set `WEB_HOST=0.0.0.0` on the preview command to make that preview reachable on a trusted network too. A deployed frontend must route same-origin `/api` requests to the API; use an HTTPS reverse proxy for public deployment, not Vite's development or preview server.
 
 ## Configuration
 
 - `HOST` — API bind address; defaults to `127.0.0.1`.
-- `PORT` — API port; defaults to `3001`.
+- `PORT` — API port; defaults to `3001` (`pnpm dev:network` sets it to `3002`).
 - `DATABASE_PATH` — SQLite file path; defaults to `data/kinsen.sqlite` relative to the API process working directory. Workspace scripts run the API from `apps/api`, so the default file is `apps/api/data/kinsen.sqlite`. Use `:memory:` for disposable test runs.
 - `KINSEN_API_TARGET` — Vite dev/preview proxy target; defaults to `http://127.0.0.1:3001`.
+- `WEB_HOST` — Vite dev/preview bind address; defaults to `127.0.0.1`. `pnpm dev:network` sets it to `0.0.0.0` without changing the API bind address.
+- `WEB_PORT` — Vite dev port; defaults to `5173` (`pnpm dev:network` sets it to `3001`).
 
 SQLite migrations run automatically when the API opens the database. `pnpm db:migrate` applies them explicitly. Stop the API and back up the database file before replacing or restoring it.
 
@@ -62,11 +72,25 @@ clerk doctor
 
 To initialize access, open the frontend URL printed by `pnpm dev` and choose **Create your account**. The first authenticated Clerk account claims the existing SQLite budget and the current browser's local IndexedDB data.
 
-On desktop, use the sidebar chevron to collapse navigation to an icon rail. Hover or keyboard-focus an icon to reveal its label. On phones, open navigation with the **Open navigation** button. Open command search from the top bar or with `⌘K`/`Ctrl+K`; dismiss it with Escape or the **Close search** button.
+For access from a different hostname or device, configure that origin in your Clerk application. Production access requires a Clerk production instance, its matching publishable/secret keys, an approved domain, and HTTPS; browser offline/PWA features also require a secure context (localhost is exempt). A browser on another device has its own IndexedDB data; asset tracking remains device-local.
+
+On desktop, use the sidebar chevron to collapse navigation to an icon rail. Hover or keyboard-focus an icon to reveal its label. On phones, open navigation with the **Open navigation** button. The top bar shows the current page, compact sync status, search, appearance, and account controls; page navigation stays in the sidebar. Open command search from the top bar or with `⌘K`/`Ctrl+K`; dismiss it with Escape or the **Close search** button.
+
+UI icons use `lucide-react`, including the theme-scoped Astryx control glyphs. The active sidebar destination keeps its selection styling and gains a stronger hover background in light and dark modes, both expanded and collapsed. The Kinsen brand mark and asset data charts are unchanged.
 
 This app is single-owner; other Clerk accounts receive `403`. To intentionally transfer API ownership, first back up the SQLite database, then run `pnpm --filter @kinsen/api db:transfer-owner -- --to-user-id <clerk-user-id>` using the target account's Clerk user ID. This changes only the `app_owner` binding; it preserves budget tables and revokes API access for the previous account. Browser-local IndexedDB ownership is separate. Multi-user budgets require a separate tenant-isolation design.
 
-**Settings** is in the app navigation. Theme color, compact layout, playful motion, and calendar week start preferences are saved on this device and do not sync to other devices. Account data controls are linked from the Settings page.
+**Settings** is in the app navigation. Choose **Light**, **Dark**, or **System** in Settings or the top-bar **Appearance** menu. System follows device appearance changes automatically; an explicit choice overrides the device setting. Appearance preferences apply immediately and are saved on this device, not synced to other devices:
+
+- **Accent color:** Evergreen, Ocean, Lilac, Terracotta, Marigold, Rose, Slate, or Indigo. Navigation highlights follow the selected accent too.
+- **Surface palette:** Warm ivory, cool blue gray, or neutral gray backgrounds and panels, independently of the accent. Each supports light and dark mode.
+- **Corners:** Rounded or crisp corners for workspace panels and Astryx controls.
+- **Heading style:** Editorial serif or modern sans-serif headings throughout the workspace.
+- **Layout and behavior:** Compact spacing, motion effects, and calendar week start remain available.
+
+Color preferences also apply to forms, command search, and Clerk account/sign-in surfaces. Existing saved preferences retain their values; newly added controls default to warm surfaces, rounded corners, and editorial headings. These controls do not alter budget or asset data. Account data controls are linked from the Settings page.
+
+**Dashboard sections** in Settings controls the Overview page (`/`). Use **Customize dashboard** on the Overview to reach these controls, then toggle Budget summary, Your assets, Category pulse, Still to pay, or Recent activity. Changes apply immediately and are saved on this device across reloads; all sections start visible. Safe to Spend and budget health always remain visible. A single visible category/commitments panel fills its row. Hiding a section only changes the dashboard view, not budget calculations or saved data; the dedicated pages remain available.
 
 **Account settings** is available from the Settings page. **Reset all account data** deletes the server budget and the current browser's budget, pending-sync, asset, and liability data while keeping the Clerk sign-in active. Other devices clear their local copies on their next sync; the reset requires the API to be reachable. **Deactivate account** bans the Clerk user from signing in, but retains Kinsen data. Only an administrator can reactivate that Clerk account; reset data separately if it must be erased.
 
@@ -103,4 +127,4 @@ On startup, an existing browser snapshot imports into an empty API. If the API h
 
 Each reset generation invalidates older browser copies. On their next synchronization, other devices clear the IndexedDB budget and queued operations instead of re-importing them.
 
-The API binds to loopback by default. Keep `HOST` at `127.0.0.1` for local use; add production origin and access controls before exposing the API publicly.
+The API binds to loopback by default, including with `pnpm dev:network`; remote clients reach it only through the frontend's `/api` proxy. Keep `HOST` at `127.0.0.1` unless an authenticated API deployment behind an HTTPS reverse proxy requires a different bind address. Do not expose the API or Vite directly to the public internet.

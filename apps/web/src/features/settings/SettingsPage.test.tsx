@@ -23,6 +23,7 @@ describe('SettingsPage', () => {
   it('saves appearance and calendar preferences as the controls change', () => {
     renderSettingsPage()
 
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Ocean' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Compact layout' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Motion effects' }))
@@ -30,11 +31,13 @@ describe('SettingsPage', () => {
     fireEvent.click(weekStartsOn)
     fireEvent.click(screen.getByRole('option', { name: 'Monday' }))
 
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked()
     expect(screen.getByRole('radio', { name: 'Ocean' })).toBeChecked()
     expect(screen.getByRole('switch', { name: 'Compact layout' })).toBeChecked()
     expect(screen.getByRole('switch', { name: 'Motion effects' })).not.toBeChecked()
     expect(screen.getByRole('combobox', { name: 'Week starts on' })).toHaveTextContent('Monday')
-    expect(JSON.parse(window.localStorage.getItem('kinsen-preferences') ?? 'null')).toEqual({
+    expect(JSON.parse(window.localStorage.getItem('kinsen-preferences') ?? 'null')).toMatchObject({
+      colorMode: 'dark',
       themeColor: 'ocean',
       weekStartsOn: 'monday',
       layoutDensity: 'compact',

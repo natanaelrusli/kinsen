@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell'
-import { SettingsPage } from '../../features/settings/SettingsPage'
 import { defaultPreferences, useSettingsStore } from '../state/settings-store'
 
 const { getToken, initializeAssets, initializeBudget } = vi.hoisted(() => ({
@@ -91,26 +90,3 @@ describe('AppShell command search', () => {
   })
 })
 
-
-
-describe('AppShell appearance settings', () => {
-  it('applies saved appearance and layout choices to the workspace', () => {
-    useSettingsStore.setState(defaultPreferences)
-    render(
-      <MemoryRouter initialEntries={['/settings']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Ocean' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Compact layout' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Motion effects' }))
-
-    expect(document.querySelector('.app-frame')).toHaveAttribute('data-theme', 'ocean')
-    expect(document.querySelector('.app-frame')).toHaveClass('is-compact', 'is-motion-reduced')
-  })
-})

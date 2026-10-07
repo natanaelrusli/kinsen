@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite",
     "prebuild": "pnpm --filter @kinsen/budget-domain build",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
     "pretest:e2e": "pnpm --filter @kinsen/api build",
     "test:e2e": "playwright test"
@@ -20,6 +20,7 @@
     "@kinsen/budget-domain": "workspace:*",
     "@stylexjs/stylex": "^0.19.1",
     "dexie": "^4.2.1",
+    "lucide-react": "^1.52.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.66.1",

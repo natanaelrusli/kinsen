@@ -1,25 +1,25 @@
 import { AppShell as AstryxAppShell } from '@astryxdesign/core/AppShell'
 import { Button } from '@astryxdesign/core/Button'
 import { CommandPalette, CommandPaletteInput } from '@astryxdesign/core/CommandPalette'
-import { Divider } from '@astryxdesign/core/Divider'
-import { DropdownMenu, DropdownMenuItem } from '@astryxdesign/core/DropdownMenu'
+import { DropdownMenu, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@astryxdesign/core/DropdownMenu'
 import { IconButton } from '@astryxdesign/core/IconButton'
 import { Kbd } from '@astryxdesign/core/Kbd'
 import { SideNav, SideNavItem, SideNavSection } from '@astryxdesign/core/SideNav'
 import { Stack } from '@astryxdesign/core/Stack'
+import { StatusDot } from '@astryxdesign/core/StatusDot'
+import { Text } from '@astryxdesign/core/Text'
 import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav'
 import { createStaticSource } from '@astryxdesign/core/Typeahead'
 import { TreeList, type TreeListItemData } from '@astryxdesign/core/TreeList'
 import { UserButton, useAuth } from '@clerk/react'
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { matchPath, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useBudgetStore } from '../state/budget-store'
 import { useAssetStore } from '../state/asset-store'
-import { formatLongDate, localToday } from '../format/date'
 import type { SyncStatus } from '../../infrastructure/repositories/api-budget-repository'
 import { setClerkTokenProvider } from '../../infrastructure/api/clerk-token-provider'
 import { Icon, type IconName } from './Icon'
-import { useSettingsStore } from '../state/settings-store'
+import { colorModeOptions, useSettingsStore, type ColorMode } from '../state/settings-store'
 
 type Destination = {
   id: string
@@ -59,44 +59,21 @@ const routeCommandSource = createStaticSource(routeCommands, {
 })
 const routeByCommandId = new Map(routeCommands.map((command) => [command.id, command.auxiliaryData.to]))
 
-type TopMenuItem =
-  | { label: string; to: string; shortcut?: string }
-  | { label: string; action: 'search'; shortcut?: string }
+function SearchGlyph() {
+  return <Icon name="search" style={{ width: 'var(--spacing-4)', height: 'var(--spacing-4)' }} />
+}
 
-const topMenus: Array<{ label: string; groups: TopMenuItem[][] }> = [
-  {
-    label: 'Plan',
-    groups: [
-      [{ label: 'Overview', to: '/' }, { label: 'Calendar', to: '/calendar' }],
-      [{ label: 'Commitments', to: '/commitments' }],
-    ],
-  },
-  {
-    label: 'Track',
-    groups: [[{ label: 'Activity', to: '/activity' }, { label: 'Assets', to: '/assets' }]],
-  },
-  {
-    label: 'Manage',
-    groups: [
-      [{ label: 'Budget settings', to: '/budget' }],
-      [{ label: 'Settings', to: '/settings' }, { label: 'Account settings', to: '/account' }],
-    ],
-  },
-  {
-    label: 'Tools',
-    groups: [[{ label: 'Search pages and commands', action: 'search', shortcut: '⌘K' }]],
-  },
-]
+function AppearanceGlyph() {
+  return <Icon name="appearance" style={{ width: 'var(--spacing-5)', height: 'var(--spacing-5)' }} />
+}
 
-const MENU_WIDTH = 280
-
-function SearchGlyph({ size = 18 }: { size?: number }) {
-  return (
-    <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4-4" />
-    </svg>
-  )
+function syncSummary(status: SyncStatus, online: boolean): string {
+  if (status === 'ACCOUNT_MISMATCH') return 'Account mismatch'
+  if (!online) return 'Offline'
+  if (status === 'PENDING') return 'Sync pending'
+  if (status === 'CONFLICT') return 'Sync paused'
+  if (status === 'ERROR') return 'Sync failed'
+  return status === 'SYNCED' ? 'Synced' : 'Saved locally'
 }
 
 function syncLabel(status: SyncStatus, online: boolean): string {
@@ -203,7 +180,6 @@ export function AppSidebar() {
 }
 
 export function AppShellChrome({
-  themeColor,
   layoutDensity,
   playfulMotion,
   online,
@@ -213,7 +189,6 @@ export function AppShellChrome({
   accountControl,
   children,
 }: {
-  themeColor: string
   layoutDensity: string
   playfulMotion: boolean
   online: boolean
@@ -225,7 +200,11 @@ export function AppShellChrome({
 }) {
   const navigate = useNavigate()
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
-  const today = localToday()
+  const { pathname } = useLocation()
+  const colorMode = useSettingsStore((state) => state.colorMode)
+  const setColorMode = useSettingsStore((state) => state.setColorMode)
+  const currentPage = destinations.find((destination) => routeMatches(pathname, destination.to, destination.to === '/'))?.label
+  const hasSyncProblem = syncStatus === 'CONFLICT' || syncStatus === 'ERROR' || syncStatus === 'ACCOUNT_MISMATCH'
   const openCommandPalette = () => setIsPaletteOpen(true)
 
   useEffect(() => {
@@ -243,50 +222,21 @@ export function AppShellChrome({
     <>
       <AstryxAppShell
         className={`app-frame${layoutDensity === 'compact' ? ' is-compact' : ''}${playfulMotion ? '' : ' is-motion-reduced'}`}
-        data-theme={themeColor}
         height="fill"
         variant="elevated"
         contentPadding={0}
         banner={error && <Stack direction="horizontal" gap={3} className="global-error" role="alert"><Icon name="warning" size={18} /><span>{error}</span><Button label="Retry" variant="secondary" type="button" onClick={onRetry} /></Stack>}
         topNav={
           <TopNav
-            label="Application menu bar"
+            label="Application top bar"
             className="app-top-nav"
             heading={<TopNavHeading heading="kinsen." headingHref="/" logo={<span className="brand-mark" aria-hidden="true"><span>K</span><i /></span>} />}
-            startContent={
-              <Stack direction="horizontal" gap={1} className="app-top-menus">
-                {topMenus.map((menu) => (
-                  <DropdownMenu
-                    key={menu.label}
-                    button={{ label: menu.label, variant: 'ghost', size: 'sm' }}
-                    hasChevron={false}
-                    menuWidth={MENU_WIDTH}>
-                    {menu.groups.map((group, groupIndex) => (
-                      <Fragment key={`${menu.label}-${groupIndex}`}>
-                        {groupIndex > 0 && <Divider />}
-                        {group.map((item) => (
-                          <DropdownMenuItem
-                            key={item.label}
-                            label={item.label}
-                            onClick={() => ('to' in item ? navigate(item.to) : openCommandPalette())}
-                            endContent={item.shortcut ? <Kbd keys={item.shortcut} /> : undefined}
-                          />
-                        ))}
-                      </Fragment>
-                    ))}
-                  </DropdownMenu>
-                ))}
-              </Stack>
-            }
+            startContent={<Text type="label" className="topbar-page-title">{currentPage}</Text>}
             endContent={
               <Stack direction="horizontal" gap={2} vAlign="center" className="app-topbar-controls">
-                <time className="topbar-date" dateTime={today} aria-label={formatLongDate(today)} title={formatLongDate(today)}>
-                  <span className="date-indicator" aria-hidden="true" />
-                  <span className="topbar-date-copy">{formatLongDate(today)}</span>
-                </time>
                 <Stack direction="horizontal" gap={2} vAlign="center" className="topbar-status" role="status" aria-live="polite">
-                  <span className={`connection-dot${!online || syncStatus === 'CONFLICT' || syncStatus === 'ERROR' || syncStatus === 'ACCOUNT_MISMATCH' ? ' is-offline' : syncStatus === 'PENDING' ? ' is-pending' : ''}`} aria-hidden="true" />
-                  <span className="topbar-status-copy">{syncLabel(syncStatus, online)}</span>
+                  <StatusDot label={syncLabel(syncStatus, online)} variant={hasSyncProblem ? 'error' : !online || syncStatus === 'PENDING' ? 'warning' : 'success'} />
+                  <Text type="supporting" className="topbar-status-copy" aria-hidden="true">{syncSummary(syncStatus, online)}</Text>
                 </Stack>
                 <Stack direction="horizontal" vAlign="center" className="app-command-search">
                   <Button
@@ -294,10 +244,10 @@ export function AppShellChrome({
                     label="Search pages and commands"
                     size="sm"
                     variant="ghost"
-                    width={256}
-                    icon={<SearchGlyph size={17} />}
+                    icon={<SearchGlyph />}
+                    endContent={<Kbd keys="mod+k" />}
                     onClick={openCommandPalette}>
-                    Search pages and commands…
+                    Search
                   </Button>
                   <IconButton
                     className="app-command-search-mobile"
@@ -308,6 +258,15 @@ export function AppShellChrome({
                     onClick={openCommandPalette}
                   />
                 </Stack>
+                <DropdownMenu
+                  button={{ label: 'Appearance', tooltip: `Appearance: ${colorMode}`, variant: 'ghost', size: 'md', isIconOnly: true, icon: <AppearanceGlyph />, className: 'topbar-appearance' }}
+                  hasChevron={false}
+                  menuWidth="max-content"
+                  alignment="end">
+                  <DropdownMenuRadioGroup label="Color mode" value={colorMode} onChange={(value) => setColorMode(value as ColorMode)}>
+                    {colorModeOptions.map((option) => <DropdownMenuRadioItem key={option.value} value={option.value} label={option.label} />)}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenu>
                 <Stack direction="horizontal" vAlign="center" className="topbar-account">{accountControl}</Stack>
               </Stack>
             }
@@ -351,7 +310,6 @@ export function AppShell() {
   const syncStatus = useBudgetStore((state) => state.syncStatus)
   const { getToken } = useAuth()
   const [online, setOnline] = useState(() => navigator.onLine)
-  const themeColor = useSettingsStore((state) => state.themeColor)
   const layoutDensity = useSettingsStore((state) => state.layoutDensity)
   const playfulMotion = useSettingsStore((state) => state.playfulMotion)
 
@@ -373,7 +331,6 @@ export function AppShell() {
 
   return (
     <AppShellChrome
-      themeColor={themeColor}
       layoutDensity={layoutDensity}
       playfulMotion={playfulMotion}
       online={online}

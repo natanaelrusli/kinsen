@@ -33,8 +33,8 @@ export default defineConfig({
       },
     }),
   ],
-  server: { proxy: apiProxy },
-  preview: { proxy: apiProxy },
+  server: { host: process.env.WEB_HOST ?? '127.0.0.1', port: Number(process.env.WEB_PORT ?? 5173), strictPort: true, proxy: apiProxy },
+  preview: { host: process.env.WEB_HOST ?? '127.0.0.1', proxy: apiProxy },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

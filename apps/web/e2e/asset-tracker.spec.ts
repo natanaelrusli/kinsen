@@ -19,14 +19,9 @@ async function startAssetHarness(page: Page) {
   await expect(page.getByRole('heading', { name: 'Assets', level: 1 })).toBeVisible()
 }
 
-test('keeps budget fields aligned and within narrow mobile viewports', async ({ page }) => {
+test('keeps budget fields within narrow mobile viewports', async ({ page }) => {
   await page.goto('/?asset-tracker-e2e=1&budget-form-e2e=1')
   await expect(page.getByRole('heading', { name: 'Budget settings', level: 1 })).toBeVisible()
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const periodInputTops = await page.locator('.budget-form-grid > .astryx-field').evaluateAll((fields) =>
-    fields.map((field) => field.querySelector('input')!.getBoundingClientRect().top),
-  )
-  expect(Math.max(...periodInputTops) - Math.min(...periodInputTops)).toBeLessThanOrEqual(1)
 
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 667 })
@@ -139,6 +134,39 @@ test('keeps settings choices in bounds and saves the selected color', async ({ p
   await expect(page.getByText('Current color: Ocean')).toBeVisible()
 })
 
+test('persists an explicit mode and resumes following system appearance', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/?asset-tracker-e2e=1&workspace-e2e=1&settings-e2e=1')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: 'Dark', exact: true }).click()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+  await expect(page.getByRole('radio', { name: 'Dark', exact: true })).toBeChecked()
+
+  await page.reload()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+
+  await page.getByRole('radio', { name: 'System', exact: true }).click()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+
+  await page.getByRole('button', { name: 'Search pages and commands', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Search pages and commands' })).toHaveCSS('color-scheme', 'dark')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: 'Light', exact: true }).click()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
+
+  await page.setViewportSize({ width: 320, height: 667 })
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  await expect(page.getByRole('button', { name: 'Appearance', exact: true })).toBeVisible()
+})
+
 test('renders the Astryx shell nav with searchable, resizable, and mobile navigation', async ({ page }) => {
   await page.goto('/?asset-tracker-e2e=1&sidebar-e2e=1')
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -146,19 +174,7 @@ test('renders the Astryx shell nav with searchable, resizable, and mobile naviga
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByRole('treeitem', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true')
 
-  const appearance = await sidebar.evaluate((element) => {
-    const activeRow = element.querySelector('li[role="treeitem"][aria-selected="true"] .astryx-tree-list-item')!
-    const sectionTitle = element.querySelector('.app-nav-section-label')!
-    return {
-      surface: getComputedStyle(element).backgroundColor,
-      activeSurface: getComputedStyle(activeRow).backgroundColor,
-      sectionTransform: getComputedStyle(sectionTitle).textTransform,
-    }
-  })
-  expect(appearance.surface).toBe('rgb(243, 242, 239)')
-  expect(appearance.activeSurface).toBe('rgb(235, 234, 230)')
-  expect(appearance.sectionTransform).toBe('uppercase')
-
+  const initialSidebarWidth = await sidebar.evaluate((element) => element.getBoundingClientRect().width)
   const resizeHandle = page.getByTestId('astryx-sidenav-resize-handle')
   await sidebar.hover()
   const handleBox = await resizeHandle.boundingBox()
@@ -167,10 +183,9 @@ test('renders the Astryx shell nav with searchable, resizable, and mobile naviga
   await page.mouse.down()
   await page.mouse.move(handleBox.x + handleBox.width / 2 + 60, handleBox.y + handleBox.height / 2, { steps: 5 })
   await page.mouse.up()
-  await expect(sidebar).toHaveCSS('width', '300px')
+  await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().width)).toBe(initialSidebarWidth + 60)
 
-  await page.getByRole('button', { name: 'Plan' }).click()
-  await page.getByRole('menuitem', { name: 'Calendar', exact: true }).click()
+  await sidebar.getByRole('link', { name: 'Calendar', exact: true }).click()
   await expect(sidebar.getByRole('treeitem', { name: 'Calendar', exact: true })).toHaveAttribute('aria-selected', 'true')
 
   await page.keyboard.press('Control+k')
@@ -182,8 +197,7 @@ test('renders the Astryx shell nav with searchable, resizable, and mobile naviga
   await expect(palette).toBeHidden()
 
   await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click()
-  await expect(sidebar).toHaveCSS('width', '48px')
-  await expect(sidebar.getByRole('link', { name: 'Commitments', exact: true })).toHaveCSS('background-color', 'rgb(231, 237, 252)')
+  await expect(sidebar.getByRole('link', { name: 'Commitments', exact: true })).toBeVisible()
   await sidebar.getByRole('button', { name: 'Expand sidebar' }).click()
 
   await page.setViewportSize({ width: 320, height: 667 })

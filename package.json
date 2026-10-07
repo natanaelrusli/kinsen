@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @kinsen/budget-domain build && pnpm --parallel --filter @kinsen/api --filter @kinsen/web dev",
+    "dev:network": "WEB_HOST=0.0.0.0 WEB_PORT=3001 PORT=3002 KINSEN_API_TARGET=http://127.0.0.1:3002 pnpm dev",
     "dev:api": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/api dev",
     "dev:web": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/web dev",
     "build": "pnpm -r build",
