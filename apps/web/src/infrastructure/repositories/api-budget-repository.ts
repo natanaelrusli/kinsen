@@ -4,20 +4,29 @@ import { DexieBudgetRepository, budgetRepository as localRepository } from './de
 import type { PendingBudgetOperation } from './pending-budget-operation'
 import { BudgetApiClient, BudgetApiError } from '../api/budget-api-client'
 
-export type SyncStatus = 'LOCAL' | 'SYNCED' | 'PENDING' | 'CONFLICT' | 'ERROR' | 'ACCOUNT_MISMATCH'
+export type SyncStatus = 'LOCAL' | 'SYNCING' | 'SYNCED' | 'PENDING' | 'CONFLICT' | 'ERROR' | 'ACCOUNT_MISMATCH'
 type SyncListener = (status: SyncStatus) => void
 
 export class ApiBudgetRepository implements BudgetRepository {
   private status: SyncStatus = 'LOCAL'
   private synchronizing = false
+  private syncPromise: Promise<void> | null = null
+  private syncRequested = false
+  private remoteCheckRequested = false
+  private requestedSeed: BudgetSnapshot | undefined
   private remoteInitialized = false
   private readonly listeners = new Set<SyncListener>()
+  private readonly accountDataListeners = new Set<() => void>()
 
   constructor(
     private readonly local: DexieBudgetRepository = localRepository,
     private readonly api = new BudgetApiClient(),
   ) {
-    if (typeof window !== 'undefined') window.addEventListener('online', () => void this.synchronize())
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        void this.synchronize().catch(() => this.setStatus('ERROR'))
+      })
+    }
   }
 
   getSyncStatus(): SyncStatus {
@@ -29,123 +38,177 @@ export class ApiBudgetRepository implements BudgetRepository {
     listener(this.status)
     return () => this.listeners.delete(listener)
   }
+  subscribeAccountDataChanges(listener: () => void): () => void {
+    this.accountDataListeners.add(listener)
+    return () => this.accountDataListeners.delete(listener)
+  }
 
   getSnapshot(): Promise<BudgetSnapshot> {
     return this.local.getSnapshot()
   }
 
   async seedIfEmpty(snapshot: BudgetSnapshot): Promise<void> {
+    const cached = await this.local.getSnapshot()
+    if (cached.period) {
+      void this.synchronize().catch(() => this.setStatus('ERROR'))
+      return
+    }
     await this.synchronize(snapshot)
   }
 
   async saveBudget(period: BudgetPeriod, categories: Category[]): Promise<void> {
     await this.local.saveBudget(period, categories)
-    await this.afterLocalMutation()
+    this.afterLocalMutation()
   }
 
   async savePlannedExpense(expense: PlannedExpense): Promise<void> {
     await this.local.savePlannedExpense(expense)
-    await this.afterLocalMutation()
+    this.afterLocalMutation()
   }
 
   async deletePlannedExpense(id: string): Promise<void> {
     await this.local.deletePlannedExpense(id)
-    await this.afterLocalMutation()
+    this.afterLocalMutation()
   }
 
   async saveTransaction(transaction: Transaction, paidFromAssetId?: string | null): Promise<void> {
     await this.local.saveTransaction(transaction, paidFromAssetId)
-    await this.afterLocalMutation()
+    this.afterLocalMutation()
   }
 
   async deleteTransaction(id: string): Promise<void> {
     await this.local.deleteTransaction(id)
-    await this.afterLocalMutation()
+    this.afterLocalMutation()
   }
 
-  private async afterLocalMutation(): Promise<void> {
-    if (this.remoteInitialized) await this.flushPending()
-    else await this.synchronize()
+  private afterLocalMutation(): void {
+    if (this.status !== 'ACCOUNT_MISMATCH') this.setStatus('PENDING')
+    void this.requestSynchronization(false).catch(() => this.setStatus('ERROR'))
   }
 
-  private async synchronize(seed?: BudgetSnapshot): Promise<void> {
-    if (this.synchronizing) return
+  private synchronize(seed?: BudgetSnapshot): Promise<void> {
+    return this.requestSynchronization(true, seed)
+  }
+
+  private requestSynchronization(checkRemote: boolean, seed?: BudgetSnapshot): Promise<void> {
+    if (seed !== undefined) this.requestedSeed = seed
+    this.syncRequested = true
+    this.remoteCheckRequested ||= checkRemote
+    if (this.syncPromise) return this.syncPromise
+    if (this.synchronizing) return Promise.resolve()
+
     this.synchronizing = true
+    this.syncPromise = this.runSynchronizationQueue()
+      .catch((error) => {
+        this.setStatus('ERROR')
+        throw error
+      })
+      .finally(() => {
+        this.synchronizing = false
+        this.syncPromise = null
+        if (this.syncRequested) this.startRequestedSynchronization()
+      })
+    return this.syncPromise
+  }
+
+  private startRequestedSynchronization(): void {
+    if (!this.syncRequested || this.synchronizing) return
+    void this.requestSynchronization(false).catch(() => this.setStatus('ERROR'))
+  }
+
+  private async runSynchronizationQueue(): Promise<void> {
+    while (this.syncRequested) {
+      const checkRemote = this.remoteCheckRequested || !this.remoteInitialized
+      const seed = this.requestedSeed
+      this.syncRequested = false
+      this.remoteCheckRequested = false
+      this.requestedSeed = undefined
+      if (checkRemote) {
+        if (this.status !== 'PENDING' && this.status !== 'ACCOUNT_MISMATCH') this.setStatus('SYNCING')
+        await this.synchronizeRemote(seed)
+      } else await this.flushPending()
+    }
+  }
+
+  private async synchronizeRemote(seed?: BudgetSnapshot): Promise<void> {
+    let localSnapshot = await this.local.getSnapshot()
+    let remoteBudget: { snapshot: BudgetSnapshot; dataGeneration: number }
     try {
-      let localSnapshot = await this.local.getSnapshot()
-      let remoteBudget: { snapshot: BudgetSnapshot; dataGeneration: number }
-      try {
-        remoteBudget = await this.api.getSnapshot()
-      } catch (error) {
-        if (error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER') {
-          this.remoteInitialized = false
-          this.setStatus('ACCOUNT_MISMATCH')
-          return
-        }
-        if (seed) await this.local.seedIfEmpty(seed)
-        const pending = await this.local.getPendingOperations()
+      remoteBudget = await this.api.getSnapshot()
+    } catch (error) {
+      if (error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER') {
         this.remoteInitialized = false
-        this.setStatus(pending.length ? 'PENDING' : 'LOCAL')
+        this.setStatus('ACCOUNT_MISMATCH')
         return
       }
+      if (seed) await this.local.seedIfEmpty(seed)
+      const pending = await this.local.getPendingOperations()
+      this.remoteInitialized = false
+      this.setStatus(pending.length ? 'PENDING' : 'LOCAL')
+      return
+    }
 
-      const localGeneration = await this.local.getDataGeneration()
-      if (remoteBudget.dataGeneration > localGeneration) {
-        await this.local.clearAccountData()
-        await this.local.setDataGeneration(remoteBudget.dataGeneration)
-        localSnapshot = await this.local.getSnapshot()
-      } else if (remoteBudget.dataGeneration < localGeneration) {
+    const localGeneration = await this.local.getDataGeneration()
+    let localDataChanged = false
+    if (remoteBudget.dataGeneration > localGeneration) {
+      await this.local.clearAccountData()
+      await this.local.setDataGeneration(remoteBudget.dataGeneration)
+      localSnapshot = await this.local.getSnapshot()
+      localDataChanged = true
+    } else if (remoteBudget.dataGeneration < localGeneration) {
+      this.remoteInitialized = false
+      this.setStatus('CONFLICT')
+      return
+    }
+    const remoteSnapshot = remoteBudget.snapshot
+    const pending = await this.local.getPendingOperations()
+    if (!localSnapshot.period && !remoteSnapshot.period) {
+      if (seed && remoteBudget.dataGeneration === 0) {
+        await this.local.seedIfEmpty(seed)
+        localDataChanged = true
+      }
+      this.remoteInitialized = true
+      if (localDataChanged) this.notifyAccountDataChanges()
+      await this.flushPending()
+      return
+    }
+    if (localSnapshot.period && !remoteSnapshot.period) {
+      await this.local.queueImportSnapshot(localSnapshot)
+      this.remoteInitialized = true
+      await this.flushPending()
+      return
+    }
+    if (!localSnapshot.period && remoteSnapshot.period) {
+      if (pending.length) {
         this.remoteInitialized = false
         this.setStatus('CONFLICT')
         return
       }
-      const remoteSnapshot = remoteBudget.snapshot
-      const pending = await this.local.getPendingOperations()
-      if (!localSnapshot.period && !remoteSnapshot.period) {
-        if (seed && remoteBudget.dataGeneration === 0) await this.local.seedIfEmpty(seed)
-        this.remoteInitialized = true
-        await this.flushPending()
-        return
-      }
-      if (localSnapshot.period && !remoteSnapshot.period) {
-        await this.local.queueImportSnapshot(localSnapshot)
-        this.remoteInitialized = true
-        await this.flushPending()
-        return
-      }
-      if (!localSnapshot.period && remoteSnapshot.period) {
-        if (pending.length) {
-          this.remoteInitialized = false
-          this.setStatus('CONFLICT')
-          return
-        }
-        try {
-          await this.local.replaceSnapshotFromRemote(remoteSnapshot)
-          this.remoteInitialized = true
-          this.setStatus('SYNCED')
-        } catch {
-          this.remoteInitialized = false
-          this.setStatus('CONFLICT')
-        }
-        return
-      }
-
-      if (pending.length) {
-        this.remoteInitialized = true
-        await this.flushPending()
-        return
-      }
-      if (snapshotsMatch(localSnapshot, remoteSnapshot)) {
+      try {
+        await this.local.replaceSnapshotFromRemote(remoteSnapshot)
         this.remoteInitialized = true
         this.setStatus('SYNCED')
-        return
+        this.notifyAccountDataChanges()
+      } catch {
+        this.remoteInitialized = false
+        this.setStatus('CONFLICT')
       }
-
-      this.remoteInitialized = false
-      this.setStatus('CONFLICT')
-    } finally {
-      this.synchronizing = false
+      return
     }
+
+    if (pending.length) {
+      this.remoteInitialized = true
+      await this.flushPending()
+      return
+    }
+    if (snapshotsMatch(localSnapshot, remoteSnapshot)) {
+      this.remoteInitialized = true
+      this.setStatus('SYNCED')
+      return
+    }
+
+    this.remoteInitialized = false
+    this.setStatus('CONFLICT')
   }
 
   async resetAccountData(): Promise<void> {
@@ -158,8 +221,10 @@ export class ApiBudgetRepository implements BudgetRepository {
       await this.local.setDataGeneration(dataGeneration)
       this.remoteInitialized = true
       this.setStatus('SYNCED')
+      this.notifyAccountDataChanges()
     } finally {
       this.synchronizing = false
+      this.startRequestedSynchronization()
     }
   }
 
@@ -170,43 +235,38 @@ export class ApiBudgetRepository implements BudgetRepository {
       await this.api.deactivateAccount()
     } finally {
       this.synchronizing = false
+      this.startRequestedSynchronization()
     }
   }
 
   private async flushPending(): Promise<void> {
-    if (this.synchronizing && !this.remoteInitialized) return
-    this.synchronizing = true
-    try {
-      while (true) {
-        const pending = await this.local.getPendingOperations()
-        if (pending.length === 0) {
-          this.setStatus(this.remoteInitialized ? 'SYNCED' : 'LOCAL')
+    while (true) {
+      const pending = await this.local.getPendingOperations()
+      if (pending.length === 0) {
+        this.setStatus(this.remoteInitialized ? 'SYNCED' : 'LOCAL')
+        return
+      }
+
+      for (const operation of pending) {
+        try {
+          await this.send(operation)
+          if (operation.queueId !== undefined) await this.local.acknowledgePendingOperation(operation.queueId)
+        } catch (error) {
+          if (
+            error instanceof BudgetApiError
+            && error.code === 'DATA_GENERATION_MISMATCH'
+            && await this.reconcileDataGeneration()
+          ) return
+
+          this.remoteInitialized = error instanceof BudgetApiError && (error.status === 409 || error.code === 'ACCOUNT_NOT_OWNER') ? false : this.remoteInitialized
+          this.setStatus(error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER'
+            ? 'ACCOUNT_MISMATCH'
+            : error instanceof BudgetApiError && error.status === 409
+              ? 'CONFLICT'
+              : error instanceof BudgetApiError && error.status < 500 ? 'ERROR' : 'PENDING')
           return
         }
-
-        for (const operation of pending) {
-          try {
-            await this.send(operation)
-            if (operation.queueId !== undefined) await this.local.acknowledgePendingOperation(operation.queueId)
-          } catch (error) {
-            if (
-              error instanceof BudgetApiError
-              && error.code === 'DATA_GENERATION_MISMATCH'
-              && await this.reconcileDataGeneration()
-            ) return
-
-            this.remoteInitialized = error instanceof BudgetApiError && (error.status === 409 || error.code === 'ACCOUNT_NOT_OWNER') ? false : this.remoteInitialized
-            this.setStatus(error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER'
-              ? 'ACCOUNT_MISMATCH'
-              : error instanceof BudgetApiError && error.status === 409
-                ? 'CONFLICT'
-                : error instanceof BudgetApiError && error.status < 500 ? 'ERROR' : 'PENDING')
-            return
-          }
-        }
       }
-    } finally {
-      this.synchronizing = false
     }
   }
 
@@ -221,11 +281,13 @@ export class ApiBudgetRepository implements BudgetRepository {
       if (remoteBudget.snapshot.period) await this.local.replaceSnapshotFromRemote(remoteBudget.snapshot)
       this.remoteInitialized = true
       this.setStatus('SYNCED')
+      this.notifyAccountDataChanges()
       return true
     } catch {
       return false
     }
   }
+
 
   private async send(operation: PendingBudgetOperation): Promise<void> {
     switch (operation.kind) {
@@ -254,6 +316,9 @@ export class ApiBudgetRepository implements BudgetRepository {
     if (status === this.status) return
     this.status = status
     for (const listener of this.listeners) listener(status)
+  }
+  private notifyAccountDataChanges(): void {
+    for (const listener of this.accountDataListeners) listener()
   }
 }
 

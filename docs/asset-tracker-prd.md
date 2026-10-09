@@ -9,6 +9,8 @@
 
 Add an offline-first asset tracker to Kinsen so users can record where their money and other assets are held, see current values, and understand how those values change over time. Asset tracking complements the daily budget: it gives a broader view of financial position while preserving a clear boundary between **wealth** and **money safe to spend in the current budget period**.
 
+**Implemented gold-pricing extension:** IDR gold holdings may explicitly opt into provider-backed retail purchase estimates from [logam-mulia-api](https://github.com/iamutaki/logam-mulia-api). Select a source, exact package product and package units; existing holdings stay manual. Save changed prices as dated local snapshots with frozen quote provenance, retain values offline/on provider failure, and never affect Safe to Spend. This extends the original manual-only scope below; bank/brokerage/FX integrations, buyback valuation and historical backfill remain out of scope.
+
 The feature must make it easy to answer:
 
 - What do I own, and where is it held?
@@ -20,10 +22,10 @@ The feature must make it easy to answer:
 
 1. **Wealth is not a spending allowance.** Total assets and net worth must never be added to Safe to Spend Today.
 2. **Keep cash purposes visible.** Distinguish daily-use cash from protected savings/emergency funds, investments, gold, and foreign currency. The user's established example is BCA/BRI for daily cash and SeaBank/Bibit/FX/gold as separate pools; these are examples, not preloaded balances.
-3. **Every value has provenance.** Show whether a value comes from a transaction-derived balance or a manual valuation, and its as-of date.
+3. **Every value has provenance.** Show whether a value comes from a transaction-derived balance, a manual valuation or an automatic gold quote, with its observation and provider dates.
 4. **Transfers do not create or destroy wealth.** A transfer between tracked asset accounts moves value without counting as income or expense.
 5. **Budget and asset records reconcile without duplication.** A budget expense paid from a tracked cash account reduces that account once and remains one expense.
-6. **Offline first and user controlled.** Data is stored locally in IndexedDB. Users enter or update balances themselves in the MVP.
+6. **Offline first and user controlled.** Data is stored locally in IndexedDB. Automatic gold pricing is opt-in; saved snapshots remain available offline and users can disable pricing without deleting history.
 
 ## 3. Goals and success measures
 
@@ -79,8 +81,8 @@ Core job: “When I review my finances, show me what I own, where it is, how its
 
 ### Later / out of scope for MVP
 
-- Live bank, brokerage, stock, mutual fund, commodity, or FX integrations.
-- Automatic market-price refresh, buy/sell order management, tax-lot accounting, and realized/unrealized tax reports.
+- Live bank, brokerage, stock, mutual fund or FX integrations, and commodity integrations other than the explicit gold-pricing extension above.
+- Automatic market-price refresh for other asset classes, buy/sell order management, tax-lot accounting, and realized/unrealized tax reports.
 - Financial advice, recommended asset allocation, or trading signals.
 - Shared household access, cloud sync, multi-user permissions, and account aggregation.
 - Historical backfill from statements or automatic import from CSV/PDF.
@@ -186,7 +188,7 @@ Domain amounts remain integer IDR for budget calculations. Asset records may sto
 
 ## 10. UX and validation
 
-- Monetary values display in IDR with separators; calculations use integer rupiah.
+- Monetary values display in IDR with separators. Currency amount inputs show zero when empty, select it for first-entry replacement, and use comma grouping while editing and after blur; submitted values remain ungrouped, and calculations use integer rupiah.
 - Date entry and display use date-only values, not UTC timestamps.
 - Require asset name, asset type, currency, and a non-negative opening value. Reject malformed dates, unsupported currency codes, and unsafe/non-integer minor-unit values.
 - Require both source and destination for transfers; source and destination must differ; transfer amounts must be positive and cannot exceed source balance unless the user explicitly records an overdraft as a separate liability.
@@ -194,7 +196,7 @@ Domain amounts remain integer IDR for budget calculations. Asset records may sto
 - Display stale price/value labels and “manual estimate” where applicable.
 - Confirm archive when there are linked records; never remove those records.
 - Use accessible labels, keyboard-operable dialogs/forms, visible field-linked errors, descriptive text alternatives for charts, high-contrast focus indicators, and mobile touch targets of at least 44px.
-- Keep budget expense entry on one screen; commitment and Paid from links remain optional and must not block a valid expense.
+- Keep budget expense entry on one screen; commitment and Paid from links remain optional and must not block a valid expense. Confirm successful additions with a transient toast; keep validation and save failures inline.
 - Use subtle dialog open/close motion and respect `prefers-reduced-motion`.
 
 ## 11. Non-functional requirements

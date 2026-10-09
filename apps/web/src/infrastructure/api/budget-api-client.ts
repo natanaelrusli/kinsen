@@ -1,4 +1,4 @@
-import type { BudgetPeriod, BudgetSnapshot, Category, PlannedExpense, Transaction } from '@kinsen/budget-domain'
+import type { BudgetPeriod, BudgetSnapshot, Category, GoldPriceResponse, GoldPriceSource, PlannedExpense, Transaction } from '@kinsen/budget-domain'
 import { getClerkToken } from './clerk-token-provider'
 
 export class BudgetApiError extends Error {
@@ -17,6 +17,10 @@ export class BudgetApiClient {
     const budget = await this.request<{ snapshot: BudgetSnapshot; dataGeneration: number }>('/budget')
     this.dataGeneration = budget.dataGeneration
     return budget
+  }
+
+  getGoldPrices(source: GoldPriceSource, signal?: AbortSignal): Promise<GoldPriceResponse> {
+    return this.request('/gold-prices?source=' + encodeURIComponent(source), { signal })
   }
 
   importSnapshot(snapshot: BudgetSnapshot): Promise<void> {

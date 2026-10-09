@@ -1,6 +1,8 @@
 import type { AssetAccount, AssetData, AssetEntry, AssetValuation, DateOnly, LiabilityAccount, LiabilityEntry } from '@kinsen/budget-domain'
 import { validateAssetData } from '@kinsen/budget-domain'
 import type { AssetRepository, AssetOpeningRecord } from '../../infrastructure/repositories/asset-repository'
+import { matchesCurrentGoldHolding } from '../../infrastructure/repositories/asset-repository'
+import { localToday } from '../../shared/format/date'
 
 export class AssetUseCases {
   constructor(private readonly repository: AssetRepository) {}
@@ -18,10 +20,14 @@ export class AssetUseCases {
     await this.repository.createAsset(asset, openingRecord)
   }
 
-  async saveAsset(asset: AssetAccount): Promise<void> {
+  async saveAsset(asset: AssetAccount, valuation?: AssetValuation): Promise<void> {
     const data = await this.getData()
-    validateAssetData({ ...data, assets: data.assets.map((item) => item.id === asset.id ? asset : item) })
-    await this.repository.saveAsset(asset)
+    validateAssetData({
+      ...data,
+      assets: data.assets.map((item) => item.id === asset.id ? asset : item),
+      valuations: valuation ? [...data.valuations, valuation] : data.valuations,
+    })
+    await this.repository.saveAsset(asset, valuation)
   }
 
   async saveActivity(entry: AssetEntry): Promise<void> {
@@ -36,6 +42,9 @@ export class AssetUseCases {
 
   async saveValuation(valuation: AssetValuation): Promise<void> {
     const data = await this.getData()
+    const asset = data.assets.find((item) => item.id === valuation.assetId)
+    if (valuation.goldQuote && !matchesCurrentGoldHolding(asset, valuation, localToday())) return
+    if (!valuation.goldQuote && asset?.goldPricing) throw new Error('Disable automatic gold pricing before recording a manual value.')
     validateAssetData({ ...data, valuations: [...data.valuations.filter((item) => item.id !== valuation.id), valuation] })
     await this.repository.saveAssetValuation(valuation)
   }

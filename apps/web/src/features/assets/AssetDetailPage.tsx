@@ -4,7 +4,7 @@ import { Spinner } from '@astryxdesign/core/Spinner'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@astryxdesign/core/Link'
 import { useParams } from 'react-router-dom'
-import type { AssetAccount, AssetEntry, AssetValuation, DateOnly } from '@kinsen/budget-domain'
+import type { AssetAccount, AssetData, AssetEntry, AssetValuation, DateOnly } from '@kinsen/budget-domain'
 import { assetTypeLabels, compareDates, currencyDigits, daysSince, deriveAssetValue, deriveAssetValues } from '@kinsen/budget-domain'
 import { addDays, addMonths } from '@kinsen/budget-domain/date-only'
 import { useAssetStore } from '../../shared/state/asset-store'
@@ -16,7 +16,12 @@ import { PageHeader } from '../../shared/components/Primitives'
 import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { AssetLineChart } from './AssetLineChart'
 import { AssetActivityForm, AssetForm, AssetValuationForm, TransferForm } from './AssetForms'
+import { RECORD_PAGE_SIZE, RecordPagination } from '../../shared/components/RecordPagination'
+import { Stack } from '@astryxdesign/core/Stack'
 
+import type { AssetOpeningRecord } from '../../infrastructure/repositories/asset-repository'
+import { GoldValueDetails, GoldValueStatus, valuationOrder } from './GoldValueDetails'
+import { useGoldPriceRefresh } from './useGoldPriceRefresh'
 const STALE_AFTER_DAYS = 30
 
 function amountForEntry(entry: AssetEntry): number {
@@ -35,16 +40,16 @@ function activityLabel(entry: AssetEntry): string {
   }
 }
 
-function latestValuation(data: ReturnType<typeof useAssetStore.getState>['data'], assetId: string): AssetValuation | null {
+function latestValuation(data: AssetData, assetId: string, today: DateOnly): AssetValuation | null {
   let latest: AssetValuation | null = null
   for (const valuation of data.valuations) {
-    if (valuation.assetId !== assetId) continue
-    if (!latest || compareDates(valuation.asOfDate, latest.asOfDate) > 0 || (valuation.asOfDate === latest.asOfDate && valuation.recordedAt > latest.recordedAt)) latest = valuation
+    if (valuation.assetId !== assetId || valuation.asOfDate > today) continue
+    if (!latest || valuationOrder(valuation, latest) > 0) latest = valuation
   }
   return latest
 }
 
-function makeHistory(data: ReturnType<typeof useAssetStore.getState>['data'], asset: AssetAccount, today: DateOnly): Array<{ date: DateOnly; value: number }> {
+function makeHistory(data: AssetData, asset: AssetAccount, today: DateOnly): Array<{ date: DateOnly; value: number }> {
   const end = asset.archivedAt ? addDays(asset.archivedAt, -1) : today
   const yearAgo = addMonths(end, -11)
   const start = compareDates(asset.createdAt, yearAgo) > 0 ? asset.createdAt : `${yearAgo.slice(0, 7)}-01`
@@ -59,7 +64,7 @@ function makeHistory(data: ReturnType<typeof useAssetStore.getState>['data'], as
 
   const valuations = asset.balanceMode === 'VALUATION'
     ? data.valuations.filter((item) => item.assetId === asset.id && compareDates(item.asOfDate, start) >= 0 && compareDates(item.asOfDate, end) <= 0)
-      .sort((left, right) => left.asOfDate.localeCompare(right.asOfDate) || left.recordedAt - right.recordedAt)
+      .sort(valuationOrder)
     : []
   const valuationDates = new Set(valuations.map((item) => item.asOfDate))
   const points = [
@@ -91,6 +96,10 @@ export function AssetDetailPage() {
   const initialize = useAssetStore((state) => state.initialize)
   const runMutation = useAssetStore((state) => state.runMutation)
   const snapshot = useBudgetStore((state) => state.snapshot)
+  const { online } = useGoldPriceRefresh()
+  const goldErrors = useAssetStore(state => state.goldErrors)
+  const goldRefreshing = useAssetStore(state => state.goldRefreshing)
+  const refreshGoldPrices = useAssetStore(state => state.refreshGoldPrices)
   const today = localToday()
   const [assetDialog, setAssetDialog] = useState(false)
   const [activityDialog, setActivityDialog] = useState(false)
@@ -100,7 +109,9 @@ export function AssetDetailPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [confirmingActivity, setConfirmingActivity] = useState<AssetEntry | null>(null)
   const [confirmingArchive, setConfirmingArchive] = useState(false)
+  const [timelinePage, setTimelinePage] = useState(1)
   useEffect(() => { void initialize() }, [initialize])
+  useEffect(() => setTimelinePage(1), [assetId])
 
   const asset = data.assets.find((item) => item.id === assetId)
   const archived = Boolean(asset?.archivedAt)
@@ -108,7 +119,7 @@ export function AssetDetailPage() {
   const activeAccounts = useMemo(() => data.assets.filter((item) => !item.archivedAt && item.balanceMode === 'LEDGER'), [data.assets])
   const values = useMemo(() => deriveAssetValues(data, asOfDate), [data, asOfDate])
   const history = useMemo(() => asset ? makeHistory(data, asset, today) : [], [data, asset, today])
-  const valuation = asset?.balanceMode === 'VALUATION' ? latestValuation(data, asset.id) : null
+  const valuation = asset?.balanceMode === 'VALUATION' ? latestValuation(data, asset.id, asOfDate) : null
   const assetEntries = useMemo(() => data.assetEntries.filter((entry) => entry.assetId === assetId).sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id)), [data.assetEntries, assetId])
   const assetValuations = useMemo(() => data.valuations.filter((item) => item.assetId === assetId).sort((left, right) => right.asOfDate.localeCompare(left.asOfDate) || right.recordedAt - left.recordedAt || right.id.localeCompare(left.id)), [data.valuations, assetId])
   const currentValuation = asset?.balanceMode === 'VALUATION' ? assetValuations.find((item) => compareDates(item.asOfDate, asOfDate) <= 0) ?? null : null
@@ -124,15 +135,18 @@ export function AssetDetailPage() {
     const rightRecordedAt = right.kind === 'VALUATION' ? right.valuation.recordedAt : 0
     return rightRecordedAt - leftRecordedAt || right.id.localeCompare(left.id)
   }), [assetEntries, assetValuations])
+  const timelinePageCount = Math.max(1, Math.ceil(timeline.length / RECORD_PAGE_SIZE))
+  const currentTimelinePage = Math.min(timelinePage, timelinePageCount)
+  const visibleTimeline = timeline.slice((currentTimelinePage - 1) * RECORD_PAGE_SIZE, currentTimelinePage * RECORD_PAGE_SIZE)
   const transactionsById = useMemo(() => new Map((snapshot?.transactions ?? []).map((item) => [item.id, item])), [snapshot?.transactions])
   const liabilityEntriesById = useMemo(() => new Map(data.liabilityEntries.map((item) => [item.id, item])), [data.liabilityEntries])
   const liabilitiesById = useMemo(() => new Map(data.liabilities.map((item) => [item.id, item])), [data.liabilities])
   const lastEntry = assetEntries.find((entry) => compareDates(entry.date, asOfDate) <= 0)
   const currentValue = asset ? values.get(asset.id) ?? 0 : 0
-  const stale = Boolean(currentValuation && daysSince(today, currentValuation.asOfDate) > STALE_AFTER_DAYS)
+  const stale = Boolean(currentValuation && !currentValuation.goldQuote && daysSince(today, currentValuation.asOfDate) > STALE_AFTER_DAYS)
 
-  async function saveAsset(updated: AssetAccount) {
-    await runMutation((useCases) => useCases.saveAsset(updated))
+  async function saveAsset(updated: AssetAccount, record?: AssetOpeningRecord) {
+    await runMutation((useCases) => useCases.saveAsset(updated, record && 'valuation' in record ? record.valuation : undefined))
     setAssetDialog(false)
   }
   async function saveActivity(entry: AssetEntry) {
@@ -156,25 +170,25 @@ export function AssetDetailPage() {
   if (!asset) return <div className="asset-load-error"><h2>Asset not found</h2><p>This asset may have been removed from this device.</p><Link className="button button-secondary" color="inherit" href="/assets">Return to Assets</Link></div>
 
   const valueDate = currentValuation?.asOfDate ?? lastEntry?.date ?? asset.createdAt
-  const showNative = currentValuation !== null
+  const showNative = currentValuation !== null && !currentValuation.goldQuote
   const paidFromTransaction = (entry: AssetEntry) => entry.budgetTransactionId ? transactionsById.get(entry.budgetTransactionId) : undefined
   const canEditEntry = (entry: AssetEntry) => entry.kind !== 'OPENING_BALANCE' && entry.kind !== 'TRANSFER_IN' && entry.kind !== 'TRANSFER_OUT' && !entry.budgetTransactionId && !entry.liabilityEntryId
   const linkedRecordCount = assetEntries.length + assetValuations.length
 
-  return <div className="asset-detail-page">
+  return <Stack as="section" className="asset-detail-page" direction="vertical" gap={4}>
     <Link className="asset-back-link" color="inherit" href="/assets"><Icon name="arrow-left" size={17} />All assets</Link>
     {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
     {pageError && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{pageError}</p>}
     {archived && <div className="archived-banner" role="status">Archived {formatDate(asset.archivedAt!, { day: 'numeric', month: 'long', year: 'numeric' })} · shown for historical review only.</div>}
-    <PageHeader eyebrow={`${assetTypeLabels[asset.type]} · ${asset.institution}`} title={asset.name} description={asset.notes ?? 'Asset values are manual estimates and stay separate from Safe to Spend Today.'} actions={!archived ? <>
+    <PageHeader eyebrow={`${assetTypeLabels[asset.type]} · ${asset.institution}`} title={asset.name} description={asset.notes ?? 'Saved asset valuations stay separate from Safe to Spend Today.'} actions={!archived ? <>
       <Button label="Edit details" icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setAssetDialog(true)} />
-      {asset.balanceMode === 'VALUATION' ? <Button label="Update value" icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setValuationDialog(true)} /> : <Button label="Add activity" icon={<Icon name="plus" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => { setEditingEntry(null); setActivityDialog(true) }} />}
+      {asset.balanceMode === 'VALUATION' ? <Button label={asset.goldPricing ? 'Refresh price' : 'Update value'} icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" isDisabled={Boolean(asset.goldPricing) && (goldRefreshing || !online)} onClick={() => { if (asset.goldPricing) void refreshGoldPrices(true); else setValuationDialog(true) }} /> : <Button label="Add activity" icon={<Icon name="plus" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => { setEditingEntry(null); setActivityDialog(true) }} />}
       {asset.balanceMode === 'LEDGER' && <Button label="Transfer" icon={<Icon name="arrow-right" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setTransferDialog(true)} isDisabled={activeAccounts.length < 2} />}
       <Button label="Archive" icon={<Icon name="trash" size={17} />} className="button button-quiet" variant="ghost" type="button" onClick={() => setConfirmingArchive(true)} />
     </> : undefined} />
 
     <section className="asset-detail-hero" aria-label="Current asset value">
-      <div><span>{archived ? 'Value before archive' : 'Current value'}</span><strong>{formatIdr(currentValue)}</strong><small>{asset.balanceMode === 'VALUATION' ? `As of ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })} · manual estimate` : `Ledger balance · activity through ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })}`}</small>{previousValuation && currentValuation && <small>Change since {formatDate(previousValuation.asOfDate, { day: 'numeric', month: 'short', year: 'numeric' })}: {currentValuation.valueIdr > previousValuation.valueIdr ? '+' : ''}{formatIdr(currentValuation.valueIdr - previousValuation.valueIdr)}</small>}</div>
+      <Stack direction="vertical" gap={1}><small>{archived ? 'Value before archive' : 'Current value'}</small><strong>{formatIdr(currentValue)}</strong><small>{asset.balanceMode === 'VALUATION' ? `As of ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })}${currentValuation?.goldQuote ? '' : ' · manual estimate'}` : `Ledger balance · activity through ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })}`}</small>{currentValuation?.goldQuote && <GoldValueDetails valuation={currentValuation} />}{(asset.goldPricing || currentValuation?.goldQuote) && !archived && <GoldValueStatus valuation={currentValuation} today={today} online={online} error={goldErrors[asset.id]} />}{previousValuation && currentValuation && <small>Change since {formatDate(previousValuation.asOfDate, { day: 'numeric', month: 'short', year: 'numeric' })}: {currentValuation.valueIdr > previousValuation.valueIdr ? '+' : ''}{formatIdr(currentValuation.valueIdr - previousValuation.valueIdr)}</small>}</Stack>
       {showNative && currentValuation && <div className="asset-native-value"><span>Native value</span><strong>{nativeValue(currentValuation)}</strong><small>1 {currentValuation.nativeCurrency} = Rp {currentValuation.exchangeRate} · rate dated {formatDate(currentValuation.rateDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small></div>}
       {stale && !archived && <span className="stale-badge">Stale manual estimate</span>}
     </section>
@@ -183,7 +197,7 @@ export function AssetDetailPage() {
 
     <section className="section-block asset-timeline-section" aria-labelledby="asset-timeline-title"><div className="section-heading"><div><p className="eyebrow">DATED RECORDS</p><h2 id="asset-timeline-title">Activity and valuations</h2></div><span className="asset-record-count">{timeline.length} records</span></div>
       {timeline.length === 0 ? <EmptyState className="empty-state" title="No dated records" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} description="Opening balances and manual valuations will appear here." /> : <div className="asset-timeline">
-        {timeline.map((record) => {
+        {visibleTimeline.map((record) => {
           if (record.kind === 'ACTIVITY') {
             const entry = record.entry
             const linkedTransaction = paidFromTransaction(entry)
@@ -199,17 +213,18 @@ export function AssetDetailPage() {
           const item = record.valuation
           return <article className="asset-timeline-row valuation-timeline-row" key={item.id}>
             <span className="asset-timeline-marker is-valuation" aria-hidden="true"><Icon name="assets" size={16} /></span>
-            <div className="asset-timeline-main"><strong>Manual valuation{item.source === 'IMPORTED' ? ' · imported' : ''}</strong><span>{formatDate(item.asOfDate, { day: 'numeric', month: 'short', year: 'numeric' })} · {nativeValue(item)}</span>{item.nativeCurrency !== 'IDR' && <small>Rate: 1 {item.nativeCurrency} = Rp {item.exchangeRate} · dated {formatDate(item.rateDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>}{item.quantity && <small>Quantity {item.quantity}{item.unitPrice ? ` · unit price ${item.unitPrice}` : ''}</small>}{item.note && <small>{item.note}</small>}</div>
+            <Stack direction="vertical" gap={1} className="asset-timeline-main">{item.goldQuote ? <GoldValueDetails valuation={item} /> : <><strong>Manual valuation{item.source === 'IMPORTED' ? ' · imported' : ''}</strong><small>{formatDate(item.asOfDate, { day: 'numeric', month: 'short', year: 'numeric' })} · {nativeValue(item)}</small>{item.nativeCurrency !== 'IDR' && <small>Rate: 1 {item.nativeCurrency} = Rp {item.exchangeRate} · dated {formatDate(item.rateDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>}{item.quantity && <small>Quantity {item.quantity}{item.unitPrice ? ` · unit price ${item.unitPrice}` : ''}</small>}{item.note && <small>{item.note}</small>}</>}</Stack>
             <strong className="timeline-amount">{formatIdr(item.valueIdr)}</strong>
-            {!archived && item.asOfDate <= today && daysSince(today, item.asOfDate) > STALE_AFTER_DAYS && <span className="stale-badge">Stale</span>}
+            {item.goldQuote ? <GoldValueStatus valuation={item} today={today} online={true} /> : !archived && item.asOfDate <= today && daysSince(today, item.asOfDate) > STALE_AFTER_DAYS && <small>Stale</small>}
           </article>
         })}
       </div>}
+        <RecordPagination count={timeline.length} page={currentTimelinePage} onPageChange={setTimelinePage} />
     </section>
 
     <AssetForm open={assetDialog} initial={asset} today={today} saving={saving} onClose={() => setAssetDialog(false)} onSave={saveAsset} />
     {asset.balanceMode === 'LEDGER' && <AssetActivityForm open={activityDialog} asset={asset} initial={editingEntry} today={today} saving={saving} onClose={() => { setActivityDialog(false); setEditingEntry(null) }} onSave={saveActivity} />}
-    {asset.balanceMode === 'VALUATION' && <AssetValuationForm open={valuationDialog} asset={asset} latest={valuation} today={today} saving={saving} onClose={() => setValuationDialog(false)} onSave={(value) => runMutation((useCases) => useCases.saveValuation(value))} />}
+    {asset.balanceMode === 'VALUATION' && !asset.goldPricing && <AssetValuationForm open={valuationDialog} asset={asset} latest={valuation} today={today} saving={saving} onClose={() => setValuationDialog(false)} onSave={(value) => runMutation((useCases) => useCases.saveValuation(value))} />}
     {asset.balanceMode === 'LEDGER' && <TransferForm open={transferDialog} accounts={activeAccounts} sourceAssetId={asset.id} today={today} saving={saving} onClose={() => setTransferDialog(false)} onSave={(input) => runMutation((useCases) => useCases.transfer(input))} />}
     <ConfirmationDialog
       open={confirmingActivity !== null}
@@ -237,5 +252,5 @@ export function AssetDetailPage() {
         void archive()
       }}
     />
-  </div>
+  </Stack>
 }

@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import request from 'supertest'
 import { createSampleSnapshot } from '@kinsen/budget-domain'
-import type { BudgetSnapshot } from '@kinsen/budget-domain'
+import type { BudgetSnapshot, GoldPriceResponse } from '@kinsen/budget-domain'
 import { migrateDatabase, openDatabase } from '../db/database.js'
 import { SqliteBudgetRepository } from '../repositories/sqlite-budget-repository.js'
 import { createApiApp, type ApiAccountActions, type ApiAuthProvider } from '../http/app.js'
@@ -10,6 +10,7 @@ import type { Express } from 'express'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { HttpError } from '../http/errors.js'
 
 let database: DatabaseSync
 let app: Express
@@ -269,3 +270,67 @@ function sortedSnapshot(snapshot: BudgetSnapshot): BudgetSnapshot {
     transactions: [...snapshot.transactions].sort((a, b) => a.id.localeCompare(b.id)),
   }
 }
+
+describe('protected gold prices API', () => {
+  const prices: GoldPriceResponse = {
+    source: 'logammulia', fetchedAt: '2026-10-09T00:00:00.000Z',
+    quotes: [{
+      source: 'logammulia', materialType: 'Emas Batangan', weightGrams: '5', lineKey: '',
+      displayName: 'Logam Mulia', sellPrice: 12600000, recordedDate: '2026-10-09',
+    }],
+  }
+
+  it('denies anonymous and non-owner callers before invoking the reader', async () => {
+    const getPrices = vi.fn().mockResolvedValue(prices)
+    app = createApiApp(new SqliteBudgetRepository(database), testAuth, undefined, { getPrices })
+    await request(app).get('/api/gold-prices?source=logammulia').set('x-test-user', 'anonymous').expect(401)
+    await request(app).get('/api/budget').expect(200)
+    await request(app).get('/api/gold-prices?source=logammulia').set('x-test-user', 'user_other').expect(403)
+    expect(getPrices).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '/api/gold-prices', '/api/gold-prices?source=kursdolar',
+    '/api/gold-prices?source=LOGAMMULIA', '/api/gold-prices?source=',
+    '/api/gold-prices?source=logammulia&source=galeri24',
+    '/api/gold-prices?source[]=logammulia',
+    '/api/gold-prices?source=https%3A%2F%2Fexample.com',
+  ])('rejects invalid source query values without fetching: %s', async (url) => {
+    const getPrices = vi.fn().mockResolvedValue(prices)
+    app = createApiApp(new SqliteBudgetRepository(database), testAuth, undefined, { getPrices })
+    const response = await request(app).get(url).expect(400)
+    expect(response.body.error.code).toBe('INVALID_REQUEST')
+    expect(getPrices).not.toHaveBeenCalled()
+  })
+
+  it('serves authenticated no-store quotes without a generation header or budget changes', async () => {
+    const repository = new SqliteBudgetRepository(database)
+    repository.importIfEmpty(createSampleSnapshot('2024-01-02'))
+    const getPrices = vi.fn().mockResolvedValue(prices)
+    app = createApiApp(repository, testAuth, undefined, { getPrices })
+    const before = (await request(app).get('/api/budget').expect(200)).body
+    const response = await request(app).get('/api/gold-prices?source=logammulia').expect(200)
+    expect(response.body).toEqual(prices)
+    expect(response.headers['cache-control']).toBe('no-store')
+    expect(getPrices).toHaveBeenCalledExactlyOnceWith('logammulia')
+    expect((await request(app).get('/api/budget').expect(200)).body).toEqual(before)
+  })
+
+  it('claims an unclaimed owner just like other protected GET routes', async () => {
+    const getPrices = vi.fn().mockResolvedValue(prices)
+    app = createApiApp(new SqliteBudgetRepository(database), testAuth, undefined, { getPrices })
+    await request(app).get('/api/gold-prices?source=logammulia').set('x-test-user', 'first_owner').expect(200)
+    await request(app).get('/api/budget').set('x-test-user', 'user_other').expect(403)
+    await request(app).get('/api/budget').set('x-test-user', 'first_owner').expect(200)
+  })
+
+  it.each([
+    [502, 'GOLD_PRICE_UNAVAILABLE', 'Gold prices are currently unavailable.'],
+    [504, 'GOLD_PRICE_TIMEOUT', 'Gold price request timed out.'],
+  ] as const)('preserves structured provider error %s', async (status, code, message) => {
+    const getPrices = vi.fn().mockRejectedValue(new HttpError(status, code, message))
+    app = createApiApp(new SqliteBudgetRepository(database), testAuth, undefined, { getPrices })
+    const response = await request(app).get('/api/gold-prices?source=logammulia').expect(status)
+    expect(response.body).toEqual({ error: { code, message } })
+  })
+})

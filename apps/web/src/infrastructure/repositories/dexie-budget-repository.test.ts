@@ -1,9 +1,11 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
-import { describe, expect, it } from 'vitest'
-import { calculateFinancialPosition, deriveLedgerBalance } from '@kinsen/budget-domain'
-import type { AssetAccount, AssetEntry, LiabilityAccount, LiabilityEntry, Transaction } from '@kinsen/budget-domain'
+import { describe, expect, it, vi } from 'vitest'
+import { calculateFinancialPosition, createGoldValuation, deriveLedgerBalance } from '@kinsen/budget-domain'
+import type { AssetAccount, AssetEntry, AssetValuation, GoldPriceQuote, LiabilityAccount, LiabilityEntry, Transaction } from '@kinsen/budget-domain'
 import { DexieBudgetRepository } from './dexie-budget-repository'
+import { AssetUseCases } from '../../application/use-cases/asset-use-cases'
+import { localToday } from '../../shared/format/date'
 
 const activityDate = '2024-01-02'
 
@@ -167,4 +169,162 @@ describe('Dexie budget/asset transaction atomicity', () => {
     await repository.clearAccountData()
   })
 
+  it('reopens version-4 manual gold unchanged and enables pricing with an atomic snapshot', async () => {
+    const repository = new DexieBudgetRepository()
+    await repository.clearAccountData()
+    const manual = manualGold('legacy-gold')
+    const opening = manualValue(manual)
+    await repository.createAsset(manual, { valuation: opening })
+    const reopened = new DexieBudgetRepository()
+    expect(await reopened.getAssetData()).toMatchObject({ assets: [manual], valuations: [opening] })
+    const automatic = automatedGold(manual.id, manual.createdAt)
+    await expect(repository.saveAsset(automatic)).rejects.toThrow('matching valuation')
+    const imported = goldValue(automatic, 'enabled')
+    await expect(repository.saveAsset(automatic, { ...imported, valueIdr: 1 })).rejects.toThrow()
+    expect(await repository.getAssetData()).toMatchObject({ assets: [manual], valuations: [opening] })
+    await repository.saveAsset(automatic, imported)
+    const data = await reopened.getAssetData()
+    expect(data.assets).toEqual([automatic])
+    expect(data.valuations.sort((left, right) => left.recordedAt - right.recordedAt)).toEqual([opening, imported])
+    await repository.saveAsset({ ...automatic, name: 'Renamed' })
+    expect((await repository.getAssetData()).assets[0]?.goldPricing).toEqual(automatic.goldPricing)
+    await expect(repository.saveAssetValuation({ ...opening, id: 'manual-override', asOfDate: localToday() })).rejects.toThrow('Disable automatic')
+    await repository.clearAccountData()
+  })
+
+  it('deduplicates only the latest effective quote and appends corrections and reversions in stable order', async () => {
+    const repository = new DexieBudgetRepository()
+    await repository.clearAccountData()
+    const asset = automatedGold('quote-history')
+    const first = goldValue(asset, 'first')
+    await repository.createAsset(asset, { valuation: first })
+    await repository.saveAssetValuation(goldValue(asset, 'same'))
+    expect((await repository.getAssetData()).valuations).toHaveLength(1)
+    await repository.saveAssetValuation(goldValue(asset, 'changed', 12_700_000))
+    await repository.saveAssetValuation(goldValue(asset, 'reverted'))
+    const history = (await repository.getAssetData()).valuations.sort((a, b) => a.recordedAt - b.recordedAt)
+    expect(history.map((item) => item.valueIdr)).toEqual([25_200_000, 25_400_000, 25_200_000])
+    expect(history.map((item) => item.recordedAt)).toEqual([100, 101, 102])
+    await expect(repository.saveAssetValuation({ ...first, goldQuote: undefined })).rejects.toThrow('Disable automatic')
+    const changedUnits: AssetAccount = { ...asset, goldPricing: { ...asset.goldPricing!, units: '3', revision: 'revision-2' } }
+    await repository.saveAsset(changedUnits, goldValue(changedUnits, 'units'))
+    expect((await repository.getAssetData()).valuations.sort((left, right) => left.recordedAt - right.recordedAt).map((item) => item.quantity)).toEqual(['2', '2', '2', '3'])
+    await repository.saveAssetValuation(goldValue(asset, 'obsolete-revision', 13_000_000))
+    expect((await repository.getAssetData()).valuations).toHaveLength(4)
+    const changedProduct: AssetAccount = { ...changedUnits, goldPricing: { ...changedUnits.goldPricing!, weightGrams: '1', revision: 'revision-3' } }
+    await repository.saveAsset(changedProduct, goldValue(changedProduct, 'product', 2_565_000))
+    expect((await repository.getAssetData()).valuations.find((item) => item.id === 'first')?.goldQuote?.weightGrams).toBe('5')
+    const disabled = { ...changedProduct, goldPricing: undefined }
+    await repository.saveAsset(disabled)
+    const manual = { ...manualValue(disabled), id: 'manual-after-disable', asOfDate: localToday(), rateDate: localToday(), nativeAmountMinor: 39_000_000, valueIdr: 39_000_000, recordedAt: 100 }
+    await repository.saveAssetValuation(manual)
+    const finalData = await repository.getAssetData()
+    expect(calculateFinancialPosition(finalData, localToday()).totalAssets).toBe(39_000_000)
+    expect(finalData.valuations.find(item => item.id === manual.id)?.recordedAt).toBe(105)
+    await repository.clearAccountData()
+  })
+
+  it('ignores obsolete imports after archive, disable and reset, including use-case preflight', async () => {
+    const repository = new DexieBudgetRepository()
+    const useCases = new AssetUseCases(repository)
+    await repository.clearAccountData()
+    const asset = automatedGold('obsolete-gold')
+    await repository.createAsset(asset, { valuation: goldValue(asset, 'opening') })
+    const pending = goldValue(asset, 'pending', 13_000_000)
+    await repository.archiveAsset(asset.id, localToday())
+    await useCases.saveValuation(pending)
+    expect((await repository.getAssetData()).valuations).toHaveLength(1)
+    await repository.clearAccountData()
+    await repository.createAsset(asset, { valuation: goldValue(asset, 'new-opening') })
+    const { goldPricing: _pricing, ...manual } = asset
+    await repository.saveAsset(manual)
+    await repository.saveAssetValuation(pending)
+    expect((await repository.getAssetData()).valuations).toHaveLength(1)
+    const manualSnapshot = { ...manualValue(manual), id: 'manual-after-disable', asOfDate: localToday() }
+    await useCases.saveValuation(manualSnapshot)
+    await expect(repository.saveAssetValuation(manualSnapshot)).rejects.toThrow()
+    await repository.clearAccountData()
+    await useCases.saveValuation(pending)
+    await repository.saveAssetValuation(pending)
+    expect((await repository.getAssetData()).assets).toEqual([])
+    expect((await repository.getAssetData()).valuations).toEqual([])
+  })
+
+  it('notifies clear subscribers after commit and supports unsubscribing', async () => {
+    const repository = new DexieBudgetRepository()
+    await repository.clearAccountData()
+    const asset = automatedGold('clear-gold')
+    await repository.createAsset(asset, { valuation: goldValue(asset, 'opening') })
+    const observations: Array<Promise<number>> = []
+    const unsubscribe = repository.onAccountDataCleared(() => {
+      observations.push(repository.getAssetData().then((data) => data.assets.length + data.valuations.length))
+    })
+    await repository.clearAccountData()
+    expect(await Promise.all(observations)).toEqual([0])
+    unsubscribe()
+    await repository.clearAccountData()
+    expect(observations).toHaveLength(1)
+  })
+
+  it('does not copy an unchanged cached quote into the next observation day', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date(2026, 9, 9, 12))
+      const repository = new DexieBudgetRepository()
+      await repository.clearAccountData()
+      const asset = automatedGold('daily-dedup')
+      const opening = goldValue(asset, 'opening')
+      await repository.createAsset(asset, { valuation: opening })
+      vi.setSystemTime(new Date(2026, 9, 10, 12))
+      const cached = { ...goldValue(asset, 'cached'), goldQuote: opening.goldQuote }
+      await repository.saveAssetValuation(cached)
+      expect((await repository.getAssetData()).valuations).toEqual([opening])
+      await repository.saveAssetValuation(goldValue(asset, 'new-provider-date'))
+      expect((await repository.getAssetData()).valuations).toHaveLength(2)
+      expect(calculateFinancialPosition(await repository.getAssetData(), '2026-10-09').totalAssets).toBe(25_200_000)
+      await repository.clearAccountData()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects invalid new automation and unchanged revisions on changed holdings without partial writes', async () => {
+    const repository = new DexieBudgetRepository()
+    await repository.clearAccountData()
+    const asset = automatedGold('invalid-gold')
+    const opening = goldValue(asset, 'opening')
+    await expect(repository.createAsset(asset, { valuation: { ...opening, nativeAmountMinor: 1 } })).rejects.toThrow()
+    expect((await repository.getAssetData()).assets).toEqual([])
+    await repository.createAsset(asset, { valuation: opening })
+    const changed: AssetAccount = { ...asset, goldPricing: { ...asset.goldPricing!, units: '3' } }
+    await expect(repository.saveAsset(changed, goldValue(changed, 'changed'))).rejects.toThrow('new holding revision')
+    await expect(repository.saveAssetValuation({ ...goldValue(asset, 'invalid-repeat'), valueIdr: 1 })).rejects.toThrow()
+    expect((await repository.getAssetData()).assets).toEqual([asset])
+    expect((await repository.getAssetData()).valuations).toEqual([opening])
+    await repository.clearAccountData()
+  })
 })
+
+function manualGold(id: string): AssetAccount {
+  return { id, name: 'Gold', type: 'GOLD', institution: 'Personal', nativeCurrency: 'IDR', balanceMode: 'VALUATION', createdAt: '2024-01-01' }
+}
+
+function manualValue(asset: AssetAccount): AssetValuation {
+  return {
+    id: `${asset.id}-manual`, assetId: asset.id, asOfDate: asset.createdAt, recordedAt: 1,
+    valueIdr: 500, nativeAmountMinor: 500, nativeCurrency: 'IDR', exchangeRate: '1',
+    rateDate: asset.createdAt, source: 'MANUAL', quantity: '2', unitPrice: '100',
+  }
+}
+
+function automatedGold(id: string, createdAt = localToday()): AssetAccount {
+  return {
+    ...manualGold(id), createdAt,
+    goldPricing: { source: 'logammulia', materialType: 'Emas Batangan', weightGrams: '5', lineKey: '', units: '2', revision: 'revision-1' },
+  }
+}
+
+function goldValue(asset: AssetAccount, id: string, sellPrice = 12_600_000): AssetValuation {
+  const quote: GoldPriceQuote = { ...asset.goldPricing!, displayName: 'Antam', sellPrice, recordedDate: localToday() }
+  return createGoldValuation(asset, quote, localToday(), 100, id)
+}

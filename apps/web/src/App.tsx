@@ -1,17 +1,20 @@
 import { Button } from '@astryxdesign/core/Button'
-import { useEffect, useState } from 'react'
+import { Spinner } from '@astryxdesign/core/Spinner'
+import { Component, lazy, Suspense, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './shared/components/AppShell'
-import { BudgetPage } from './features/budget/BudgetPage'
-import { CalendarPage } from './features/calendar/CalendarPage'
-import { CommitmentsPage } from './features/commitments/CommitmentsPage'
-import { DashboardPage } from './features/dashboard/DashboardPage'
-import { TransactionsPage } from './features/transactions/TransactionsPage'
-import { SettingsPage } from './features/settings/SettingsPage'
-import { AccountSettingsPage } from './features/account/AccountSettingsPage'
-import { AssetsPage } from './features/assets/AssetsPage'
-import { AssetDetailPage } from './features/assets/AssetDetailPage'
+
+const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
+const CalendarPage = lazy(() => import('./features/calendar/CalendarPage').then(({ CalendarPage }) => ({ default: CalendarPage })))
+const CommitmentsPage = lazy(() => import('./features/commitments/CommitmentsPage').then(({ CommitmentsPage }) => ({ default: CommitmentsPage })))
+const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage').then(({ TransactionsPage }) => ({ default: TransactionsPage })))
+const BudgetPage = lazy(() => import('./features/budget/BudgetPage').then(({ BudgetPage }) => ({ default: BudgetPage })))
+const AssetsPage = lazy(() => import('./features/assets/AssetsPage').then(({ AssetsPage }) => ({ default: AssetsPage })))
+const AssetDetailPage = lazy(() => import('./features/assets/AssetDetailPage').then(({ AssetDetailPage }) => ({ default: AssetDetailPage })))
+const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then(({ SettingsPage }) => ({ default: SettingsPage })))
+const AccountSettingsPage = lazy(() => import('./features/account/AccountSettingsPage').then(({ AccountSettingsPage }) => ({ default: AccountSettingsPage })))
 
 const budgetOwnerKey = 'kinsen-budget-clerk-owner'
 
@@ -92,22 +95,48 @@ function AccountGate() {
 
   return <BudgetApplication />
 }
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <section className="load-error-state" role="alert" aria-labelledby="route-load-error-title">
+        <h2 id="route-load-error-title">This page could not be loaded</h2>
+        <p>Check your connection, then reload to try again.</p>
+        <Button label="Reload page" className="button button-secondary" variant="secondary" type="button" onClick={() => window.location.reload()} />
+      </section>
+    )
+  }
+}
+
+function RouteContent() {
+  const location = useLocation()
+  return <RouteErrorBoundary key={location.key}><Suspense fallback={<Spinner className="loading-state route-loading-state" label="Loading page" size="md" />}><Outlet /></Suspense></RouteErrorBoundary>
+}
+
 
 function BudgetApplication() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="commitments" element={<CommitmentsPage />} />
-          <Route path="activity" element={<TransactionsPage />} />
-          <Route path="budget" element={<BudgetPage />} />
-          <Route path="assets" element={<AssetsPage />} />
-          <Route path="assets/:assetId" element={<AssetDetailPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="account" element={<AccountSettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route element={<RouteContent />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="commitments" element={<CommitmentsPage />} />
+            <Route path="activity" element={<TransactionsPage />} />
+            <Route path="budget" element={<BudgetPage />} />
+            <Route path="assets" element={<AssetsPage />} />
+            <Route path="assets/:assetId" element={<AssetDetailPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="account" element={<AccountSettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

@@ -17,6 +17,40 @@ export type AssetEntryKind = 'OPENING_BALANCE' | 'CREDIT' | 'DEBIT' | 'TRANSFER_
 export type LiabilityType = 'CREDIT_CARD' | 'PAY_LATER' | 'INSTALLMENT' | 'LOAN' | 'OTHER'
 export type LiabilityEntryKind = 'OPENING_BALANCE' | 'CHARGE' | 'PAYMENT' | 'INTEREST_OR_FEE' | 'CORRECTION'
 
+export const goldPriceSources = [
+  'anekalogam', 'hargaemas-org', 'lakuemas', 'sakumas', 'cermati',
+  'indogold', 'hargaemas-net', 'hargaemas-com', 'treasury',
+  'logammulia', 'emasku', 'hartadinataabadi', 'galeri24',
+  'sampoernagold', 'bankbsi', 'brankaslm', 'pegadaian',
+] as const
+export type GoldPriceSource = typeof goldPriceSources[number]
+export interface GoldProduct {
+  source: GoldPriceSource
+  materialType: string
+  weightGrams: string
+  lineKey: string
+}
+export interface GoldPricing extends GoldProduct {
+  units: string
+  revision: string
+}
+export interface GoldPriceQuote extends GoldProduct {
+  displayName: string
+  sellPrice: number
+  recordedDate: DateOnly
+}
+export interface GoldPriceResponse {
+  source: GoldPriceSource
+  quotes: GoldPriceQuote[]
+  fetchedAt: string
+}
+export interface GoldQuoteProvenance extends GoldProduct {
+  displayName: string
+  priceBasis: 'SELL'
+  recordedDate: DateOnly
+  holdingRevision: string
+}
+
 export interface AssetAccount {
   id: string
   name: string
@@ -28,6 +62,7 @@ export interface AssetAccount {
   notes?: string
   createdAt: DateOnly
   archivedAt?: DateOnly
+  goldPricing?: GoldPricing
 }
 
 export interface AssetEntry {
@@ -59,6 +94,7 @@ export interface AssetValuation {
   note?: string
   /** Stable latest-record ordering for multiple valuations on the same date. */
   recordedAt: number
+  goldQuote?: GoldQuoteProvenance
 }
 
 export interface LiabilityAccount {
@@ -200,6 +236,62 @@ export function convertMinorUnitsToIdr(nativeAmountMinor: number, currency: stri
   if (rounded > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('IDR value is too large to store safely.')
   return Number(rounded)
 }
+export function normalizeGoldDecimal(value: string): string {
+  if (typeof value !== 'string' || !/^\d+(?:\.\d{1,8})?$/.test(value)) {
+    throw new Error('Gold quantities must use unsigned decimals with up to 8 decimal places.')
+  }
+  const [whole, fraction = ''] = value.split('.')
+  const normalizedWhole = whole!.replace(/^0+(?=\d)/, '')
+  const normalizedFraction = fraction.replace(/0+$/, '')
+  return normalizedFraction ? `${normalizedWhole}.${normalizedFraction}` : normalizedWhole
+}
+
+export function calculateGoldValueIdr(units: string, sellPrice: number): number {
+  const normalized = normalizeGoldDecimal(units)
+  if (!Number.isSafeInteger(sellPrice) || sellPrice <= 0) throw new Error('Gold price must be a positive safe integer.')
+  const [whole, fraction = ''] = normalized.split('.')
+  const denominator = 10n ** BigInt(fraction.length)
+  const numerator = BigInt(`${whole}${fraction}`) * BigInt(sellPrice)
+  const result = (numerator * 2n + denominator) / (2n * denominator)
+  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Gold value is too large to store safely.')
+  return Number(result)
+}
+
+function validateGoldProduct(product: GoldProduct): void {
+  if (!goldPriceSources.includes(product.source)) throw new Error('Choose a supported gold price source.')
+  requireText(product.materialType, 'Gold product')
+  if (typeof product.lineKey !== 'string') throw new Error('Gold product line must be a string.')
+  if (normalizeGoldDecimal(product.weightGrams) !== product.weightGrams || product.weightGrams === '0') {
+    throw new Error('Gold package weight must be a normalized positive decimal.')
+  }
+}
+
+export function createGoldValuation(asset: AssetAccount, quote: GoldPriceQuote, asOfDate: DateOnly, recordedAt: number, id: string): AssetValuation {
+  validateAssetAccount(asset)
+  const pricing = asset.goldPricing
+  if (!pricing) throw new Error('Automatic gold pricing is not configured.')
+  validateGoldProduct(quote)
+  parseDateOnly(asOfDate)
+  parseDateOnly(quote.recordedDate)
+  if (quote.recordedDate > asOfDate) throw new Error('Gold price is dated after today\'s valuation date.')
+  if (pricing.source !== quote.source || pricing.materialType !== quote.materialType ||
+      pricing.weightGrams !== quote.weightGrams || pricing.lineKey !== quote.lineKey) {
+    throw new Error('Gold quote does not match the selected product.')
+  }
+  requireText(quote.displayName, 'Gold quote name')
+  const valueIdr = calculateGoldValueIdr(pricing.units, quote.sellPrice)
+  return {
+    id, assetId: asset.id, asOfDate, recordedAt, source: 'IMPORTED',
+    nativeAmountMinor: valueIdr, nativeCurrency: 'IDR', exchangeRate: '1',
+    rateDate: asOfDate, valueIdr, quantity: pricing.units, unitPrice: String(quote.sellPrice),
+    goldQuote: {
+      source: quote.source, materialType: quote.materialType, weightGrams: quote.weightGrams,
+      lineKey: quote.lineKey, displayName: quote.displayName, priceBasis: 'SELL',
+      recordedDate: quote.recordedDate, holdingRevision: pricing.revision,
+    },
+  }
+}
+
 
 export function deriveLedgerBalance(entries: readonly AssetEntry[], asOfDate: DateOnly): number {
   parseDateOnly(asOfDate)
@@ -448,6 +540,22 @@ export function validateAssetData(data: AssetData): void {
     }
     validateOptionalDecimal(valuation.quantity, 'Quantity')
     validateOptionalDecimal(valuation.unitPrice, 'Unit price')
+    if (valuation.goldQuote) {
+      const quote = valuation.goldQuote
+      validateGoldProduct(quote)
+      requireText(quote.displayName, 'Gold quote name')
+      requireText(quote.holdingRevision, 'Gold holding revision')
+      parseDateOnly(quote.recordedDate)
+      if (quote.priceBasis !== 'SELL' || valuation.source !== 'IMPORTED' ||
+          valuation.nativeCurrency !== 'IDR' || valuation.exchangeRate !== '1' ||
+          valuation.rateDate !== valuation.asOfDate || quote.recordedDate > valuation.asOfDate ||
+          valuation.nativeAmountMinor !== valuation.valueIdr ||
+          valuation.quantity === undefined || normalizeGoldDecimal(valuation.quantity) !== valuation.quantity ||
+          !/^[1-9]\d*$/.test(valuation.unitPrice ?? '') ||
+          calculateGoldValueIdr(valuation.quantity, Number(valuation.unitPrice)) !== valuation.valueIdr) {
+        throw new Error('The saved gold value does not match its quote and holding.')
+      }
+    }
     if (valuation.note !== undefined && valuation.note.length > 500) throw new Error('Valuation notes must be 500 characters or fewer.')
   }
 
@@ -507,6 +615,16 @@ export function validateAssetAccount(asset: AssetAccount): void {
   if (asset.balanceMode === 'LEDGER' && asset.nativeCurrency !== 'IDR') throw new Error('Cash-like ledger accounts must use IDR.')
   if (asset.purpose !== undefined && !['DAILY_CASH', 'PROTECTED_SAVINGS', 'INVESTMENT', 'OTHER'].includes(asset.purpose)) throw new Error('Choose a supported asset purpose.')
   if (asset.notes !== undefined && asset.notes.length > 1000) throw new Error('Asset notes must be 1,000 characters or fewer.')
+  if (asset.goldPricing) {
+    if (asset.type !== 'GOLD' || asset.balanceMode !== 'VALUATION' || asset.nativeCurrency !== 'IDR') {
+      throw new Error('Automatic gold pricing requires an IDR gold asset.')
+    }
+    validateGoldProduct(asset.goldPricing)
+    requireText(asset.goldPricing.revision, 'Gold holding revision')
+    if (normalizeGoldDecimal(asset.goldPricing.units) !== asset.goldPricing.units) {
+      throw new Error('Gold units must be a normalized decimal.')
+    }
+  }
   parseDateOnly(asset.createdAt)
   if (asset.archivedAt) {
     parseDateOnly(asset.archivedAt)

@@ -7,7 +7,7 @@ import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { newId } from '../../shared/format/id'
 import { FormWizardDialog } from '../../shared/components/FormWizard'
 import { Grid } from '@astryxdesign/core/Grid'
-import { AstryxDateField, AstryxNumberField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
+import { CurrencyAmountField, AstryxDateField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { useBudgetStore } from '../../shared/state/budget-store'
 
 const plannedExpenseSchema = z.object({
@@ -83,7 +83,7 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
           content: <>
             <AstryxTextField control={control} name="name" label="Name" autoComplete="off" maxLength={80} className="field" />
             <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-              <AstryxNumberField control={control} name="amount" label="Amount" prefix={<span>Rp</span>} min={1} className="field" />
+              <CurrencyAmountField control={control} name="amount" label="Amount" prefix={<span>Rp</span>} className="field" />
               <AstryxSelectField
                 control={control}
                 name="categoryId"

@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState, type FormEvent, type FormEventHandler, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import type { FormEvent, FormEventHandler, ReactNode } from 'react'
 import { Button } from '@astryxdesign/core/Button'
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog'
 import { Stack } from '@astryxdesign/core/Stack'
@@ -37,20 +38,63 @@ export function FormWizard({
   const [invalidSteps, setInvalidSteps] = useState<ReadonlySet<number>>(() => new Set())
   const [isValidating, setIsValidating] = useState(false)
   const validationInFlight = useRef(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const bodyRef = useRef<HTMLElement>(null)
+  const previousStepRef = useRef(0)
+  const [focusRequest, setFocusRequest] = useState<readonly string[] | null>(null)
 
   useLayoutEffect(() => {
     if (open === undefined) return
     setActiveStep(0)
+    previousStepRef.current = 0
     setInvalidSteps(new Set())
+    setFocusRequest(null)
     validationInFlight.current = false
     setIsValidating(false)
   }, [open])
+
+  useLayoutEffect(() => {
+    if (open === false || !focusRequest) return
+    const form = formRef.current
+    if (!form) return
+    const namedFields = Array.from(form.elements).filter((element): element is HTMLElement & { name: string } => {
+      if (!(element instanceof HTMLElement) || !('name' in element) || typeof element.name !== 'string') return false
+      const name = element.name
+      return focusRequest.some((fieldName) =>
+        name === fieldName ||
+        (name.startsWith(fieldName) && (name[fieldName.length] === '.' || name[fieldName.length] === '[')),
+      )
+    })
+    const invalidField = namedFields.find((element) => element.getAttribute('aria-invalid') === 'true')
+    const namedField = invalidField ?? namedFields[0]
+    const target = namedField instanceof HTMLInputElement && namedField.type === 'hidden'
+      ? namedField.parentElement?.querySelector<HTMLElement>('button:not(:disabled), [role="combobox"]:not([aria-disabled="true"])')
+      : namedField
+    if (target && !target.matches(':disabled, [aria-disabled="true"]')) {
+      target.focus()
+      return
+    }
+    bodyRef.current?.focus()
+  }, [focusRequest, open])
 
   if (steps.length === 0) throw new Error('FormWizard requires at least one step.')
 
   const currentIndex = Math.min(activeStep, steps.length - 1)
   const finalStep = currentIndex === steps.length - 1
   const active = steps[currentIndex]!
+  useLayoutEffect(() => {
+    if (open === false) {
+      previousStepRef.current = currentIndex
+      return
+    }
+    if (previousStepRef.current === currentIndex) return
+    previousStepRef.current = currentIndex
+    const body = bodyRef.current
+    if (!body) return
+    body.scrollTop = 0
+    body.focus()
+  }, [currentIndex, open])
+
 
   async function validateActiveStep() {
     if (validationInFlight.current) return false
@@ -64,6 +108,7 @@ export function FormWizard({
         else next.add(currentIndex)
         return next
       })
+      if (!valid) setFocusRequest([...active.fields])
       return valid
     } finally {
       validationInFlight.current = false
@@ -87,7 +132,7 @@ export function FormWizard({
   }
 
   return (
-    <form className={`form-wizard${className ? ` ${className}` : ''}`} onSubmit={handleSubmit} noValidate>
+    <form ref={formRef} className={`form-wizard${className ? ` ${className}` : ''}`} onSubmit={handleSubmit} noValidate>
       <Stepper
         activeStep={currentIndex}
         label="Form progress"
@@ -109,7 +154,16 @@ export function FormWizard({
         ))}
       </Stepper>
 
-      <Stack className="form-wizard-body" direction="vertical" gap={3} role="group" aria-label={active.label}>
+      <Stack
+        as="section"
+        ref={bodyRef}
+        tabIndex={-1}
+        className="form-wizard-body"
+        role="group"
+        aria-label={active.label}
+        direction="vertical"
+        gap={3}
+      >
         {active.content}
       </Stack>
 

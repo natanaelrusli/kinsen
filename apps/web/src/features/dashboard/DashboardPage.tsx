@@ -22,6 +22,8 @@ import { localToday } from '../../shared/format/date'
 import { useAssetStore } from '../../shared/state/asset-store'
 import { useSettingsStore } from '../../shared/state/settings-store'
 
+import { useGoldPriceRefresh } from '../assets/useGoldPriceRefresh'
+import { GoldValueStatus, valuationOrder } from '../assets/GoldValueDetails'
 const healthCopy = {
   ON_TRACK: { label: 'On track', detail: 'Your reserve and current plans fit inside this period.', icon: 'check' as const },
   AT_RISK: { label: 'Needs attention', detail: 'Spending and unpaid commitments are using protected room.', icon: 'warning' as const },
@@ -38,6 +40,9 @@ export function DashboardPage() {
   const runMutation = useBudgetStore((state) => state.runMutation)
   const assetStatus = useAssetStore((state) => state.status)
   const assetData = useAssetStore((state) => state.data)
+  const { online } = useGoldPriceRefresh()
+  const goldErrors = useAssetStore(state => state.goldErrors)
+  const goldHoldings = assetData.assets.filter(asset => asset.goldPricing && !asset.archivedAt && asset.createdAt <= (overview?.today ?? localToday()))
   const dashboardSections = useSettingsStore((state) => state.dashboardSections)
   const assetPosition = useMemo(() => calculateFinancialPosition(assetData, overview?.today ?? localToday()), [assetData, overview?.today])
   const hasActiveLiabilities = assetData.liabilities.some((liability) => !liability.archivedAt)
@@ -95,6 +100,7 @@ export function DashboardPage() {
         </div>
         {assetPosition.netWorth === null && assetPosition.totalAssets === 0 && <p className="dashboard-assets-empty">Add assets or liabilities for a financial-position summary. These figures never change Safe to Spend Today.</p>}
         <p className="dashboard-assets-note">Separate from Safe to Spend Today.</p>
+        {goldHoldings.map(asset => <GoldValueStatus key={asset.id} today={overview.today} online={online} error={goldErrors[asset.id]} valuation={assetData.valuations.filter(item => item.assetId === asset.id && item.asOfDate <= overview.today).sort(valuationOrder).at(-1)} />)}
       </section>}
 
       {(dashboardSections.categories || dashboardSections.commitments) && <Stack gap={0} className={dashboardSections.categories && dashboardSections.commitments ? 'dashboard-content-grid' : undefined}>

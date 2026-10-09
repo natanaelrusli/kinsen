@@ -1,7 +1,13 @@
 import { useId } from 'react'
 import type { DateOnly } from '@kinsen/budget-domain'
+import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { formatDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
+
+function localCalendarDay(date: DateOnly): number {
+  const { year, month, day } = parseDateOnly(date)
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
+}
 
 export function AssetLineChart({ points, description = 'Asset value history' }: { points: Array<{ date: DateOnly; value: number }>; description?: string }) {
   const titleId = useId()
@@ -15,9 +21,15 @@ export function AssetLineChart({ points, description = 'Asset value history' }: 
   const min = Math.min(...values)
   const max = Math.max(...values)
   const spread = max - min || 1
-  const coordinates = points.map((point, index) => ({
-    x: insetX + (points.length === 1 ? (width - insetX * 2) / 2 : index / (points.length - 1) * (width - insetX * 2)),
-    y: height - insetY - (point.value - min) / spread * (height - insetY * 2),
+  const firstDay = localCalendarDay(points[0]!.date)
+  const lastDay = localCalendarDay(points[points.length - 1]!.date)
+  const duration = lastDay - firstDay
+  // Same-day observations share one temporal x; retain endpoint markers on the first and last samples.
+  const coordinates = points.map((point) => ({
+    x: duration === 0
+      ? width / 2
+      : insetX + (localCalendarDay(point.date) - firstDay) / duration * (width - insetX * 2),
+    y: max === min ? height / 2 : height - insetY - (point.value - min) / spread * (height - insetY * 2),
   }))
   const linePoints = coordinates.map(({ x, y }) => `${x},${y}`).join(' ')
   return <figure className="asset-chart">

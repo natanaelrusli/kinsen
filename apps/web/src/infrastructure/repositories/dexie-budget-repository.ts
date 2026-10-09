@@ -6,6 +6,8 @@ import type { PendingBudgetOperation } from './pending-budget-operation'
 import { validateAssetData } from '@kinsen/budget-domain'
 import type { AssetRepository } from './asset-repository'
 import type { AssetOpeningRecord } from './asset-repository'
+import { goldHoldingChanged, matchesCurrentGoldHolding } from './asset-repository'
+import { localToday } from '../../shared/format/date'
 
 class BudgetDatabase extends Dexie {
   periods!: Table<BudgetPeriod, string>
@@ -62,6 +64,13 @@ class BudgetDatabase extends Dexie {
 }
 
 export class DexieBudgetRepository implements BudgetRepository, AssetRepository {
+  private readonly accountDataClearedListeners = new Set<() => void>()
+
+  onAccountDataCleared(listener: () => void): () => void {
+    this.accountDataClearedListeners.add(listener)
+    return () => { this.accountDataClearedListeners.delete(listener) }
+  }
+
   constructor(private readonly db = new BudgetDatabase()) {}
 
   async getSnapshot(): Promise<BudgetSnapshot> {
@@ -112,6 +121,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
         ])
       },
     )
+    for (const listener of this.accountDataClearedListeners) listener()
   }
 
 
@@ -208,6 +218,10 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
   async createAsset(asset: AssetAccount, openingRecord: AssetOpeningRecord): Promise<void> {
     await this.db.transaction('rw', this.db.assetAccounts, this.db.assetEntries, this.db.assetValuations, this.db.liabilityAccounts, this.db.liabilityEntries, async () => {
       const data = await this.readAssetData()
+      if (asset.goldPricing && (asset.createdAt !== localToday() || !('valuation' in openingRecord) ||
+          openingRecord.valuation.asOfDate !== localToday() || !matchesCurrentGoldHolding(asset, openingRecord.valuation, localToday()))) {
+        throw new Error('Automatic gold holdings require a matching opening valuation today.')
+      }
       const next: AssetData = { ...data, assets: [...data.assets, asset] }
       if ('entry' in openingRecord) next.assetEntries = [...data.assetEntries, openingRecord.entry]
       else next.valuations = [...data.valuations, openingRecord.valuation]
@@ -218,14 +232,34 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
     })
   }
 
-  async saveAsset(asset: AssetAccount): Promise<void> {
+  async saveAsset(asset: AssetAccount, valuation?: AssetValuation): Promise<void> {
     await this.db.transaction('rw', this.db.assetAccounts, this.db.assetEntries, this.db.assetValuations, this.db.liabilityAccounts, this.db.liabilityEntries, async () => {
       const data = await this.readAssetData()
       const current = data.assets.find((item) => item.id === asset.id)
       if (!current || current.archivedAt) throw new Error('This asset is archived or no longer available.')
       if (current.createdAt !== asset.createdAt || current.archivedAt !== asset.archivedAt) throw new Error('Asset dates cannot be changed while editing details.')
-      validateAssetData({ ...data, assets: data.assets.map((item) => item.id === asset.id ? asset : item) })
+      const today = localToday()
+      if (current.goldPricing && asset.goldPricing) {
+        const productOrUnitsChanged = goldHoldingChanged(current, {
+          ...asset, goldPricing: { ...asset.goldPricing, revision: current.goldPricing.revision },
+        })
+        if (productOrUnitsChanged && current.goldPricing.revision === asset.goldPricing.revision) {
+          throw new Error('Changed gold holdings require a new holding revision.')
+        }
+      }
+      if (goldHoldingChanged(current, asset) && !valuation) throw new Error('Changing automatic gold holdings requires a matching valuation today.')
+      if (valuation && (valuation.assetId !== asset.id || valuation.asOfDate !== today || !matchesCurrentGoldHolding(asset, valuation, today))) {
+        throw new Error('Automatic gold holdings require a matching valuation today.')
+      }
+      const latest = data.valuations.filter((item) => item.assetId === asset.id && item.asOfDate <= today)
+        .sort((left, right) => right.asOfDate.localeCompare(left.asOfDate) || right.recordedAt - left.recordedAt || right.id.localeCompare(left.id))[0]
+      const appended = valuation && latest ? { ...valuation, recordedAt: Math.max(valuation.recordedAt, latest.recordedAt + 1) } : valuation
+      validateAssetData({
+        ...data, assets: data.assets.map((item) => item.id === asset.id ? asset : item),
+        valuations: appended ? [...data.valuations, appended] : data.valuations,
+      })
       await this.db.assetAccounts.put(asset)
+      if (appended) await this.db.assetValuations.add(appended)
     })
   }
 
@@ -260,8 +294,29 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
   async saveAssetValuation(valuation: AssetValuation): Promise<void> {
     await this.db.transaction('rw', this.db.assetAccounts, this.db.assetEntries, this.db.assetValuations, this.db.liabilityAccounts, this.db.liabilityEntries, async () => {
       const data = await this.readAssetData()
-      validateAssetData({ ...data, valuations: [...data.valuations.filter((item) => item.id !== valuation.id), valuation] })
-      await this.db.assetValuations.add(valuation)
+      const asset = data.assets.find((item) => item.id === valuation.assetId)
+      let appended = valuation
+      const latest = data.valuations.filter((item) => item.assetId === valuation.assetId && item.asOfDate <= valuation.asOfDate)
+        .sort((left, right) => right.asOfDate.localeCompare(left.asOfDate) || right.recordedAt - left.recordedAt || right.id.localeCompare(left.id))[0]
+      if (valuation.goldQuote) {
+        const today = localToday()
+        if (!matchesCurrentGoldHolding(asset, valuation, today)) return
+        if (valuation.asOfDate !== today) throw new Error('Automatic gold valuations must be observed today.')
+        const previous = latest?.goldQuote
+        const quote = valuation.goldQuote
+        if (previous && previous.source === quote.source && previous.materialType === quote.materialType &&
+            previous.weightGrams === quote.weightGrams && previous.lineKey === quote.lineKey &&
+            previous.holdingRevision === quote.holdingRevision && latest.quantity === valuation.quantity &&
+            previous.recordedDate === quote.recordedDate && latest.unitPrice === valuation.unitPrice) {
+          validateAssetData({ ...data, valuations: [...data.valuations.filter((item) => item.id !== valuation.id), valuation] })
+          return
+        }
+      } else if (asset?.goldPricing) {
+        throw new Error('Disable automatic gold pricing before recording a manual value.')
+      }
+      if (latest) appended = { ...valuation, recordedAt: Math.max(valuation.recordedAt, latest.recordedAt + 1) }
+      validateAssetData({ ...data, valuations: [...data.valuations, appended] })
+      await this.db.assetValuations.add(appended)
     })
   }
 

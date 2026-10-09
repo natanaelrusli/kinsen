@@ -10,7 +10,7 @@ import { formatIdr } from '../../shared/format/money'
 import { newId } from '../../shared/format/id'
 import { Button } from '@astryxdesign/core/Button'
 import { Spinner } from '@astryxdesign/core/Spinner'
-import { AstryxColorField, AstryxDateField, AstryxNumberField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
+import { AstryxColorField, AstryxDateField, CurrencyAmountField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
 import { Grid } from '@astryxdesign/core/Grid'
@@ -203,7 +203,7 @@ export function BudgetPage() {
     }),
   ].filter((message): message is string => typeof message === 'string')
   return (
-    <main className="budget-page">
+    <Stack as="section" className="budget-page" gap={0}>
       <PageHeader eyebrow="YOUR PLAN" title="Budget settings" description={snapshot?.period?.isSample ? 'A starter plan is ready. Shape it around the money you actually have.' : `Set the limits that keep this period safe. Current period: ${dateRange}.`} />
       {snapshot?.period?.isSample && <aside className="sample-note"><span className="sample-note-mark" aria-hidden="true">i</span><p><strong>Starter budget</strong> — these amounts are examples. Save your own plan to make it yours.</p></aside>}
       <FormWizard
@@ -219,8 +219,8 @@ export function BudgetPage() {
                 <p>Use local calendar dates. Both the start and end day are included.</p>
               </Stack>
               <Grid className="budget-form-grid" columns={{ minWidth: 220, max: 2 }} gap={3}>
-                <AstryxNumberField control={control} name="totalAmount" label="Total budget" prefix="Rp" min={1} className="field" />
-                <AstryxNumberField control={control} name="reserveAmount" label="Protected reserve" prefix="Rp" min={0} description="Held back from daily spending." className="field" />
+                <CurrencyAmountField control={control} name="totalAmount" label="Total budget" prefix="Rp" className="field" />
+                <CurrencyAmountField control={control} name="reserveAmount" label="Protected reserve" prefix="Rp" description="Held back from daily spending." className="field" />
                 <AstryxDateField control={control} name="startDate" label="Start date" className="field" />
                 <AstryxDateField control={control} name="endDate" label="End date" className="field" />
               </Grid>
@@ -236,8 +236,8 @@ export function BudgetPage() {
                 <p>Flexible and planned amounts plus your reserve must add up to the total.</p>
               </Stack>
               <Grid className="allocation-grid" columns={{ minWidth: 220, max: 2 }} gap={3}>
-                <AstryxNumberField control={control} name="flexibleAllocation" label="Flexible allocation" prefix="Rp" min={0} description="Day-to-day and period spending." className="field" />
-                <AstryxNumberField control={control} name="plannedAllocation" label="Planned allocation" prefix="Rp" min={0} description="Bills and future commitments." className="field" />
+                <CurrencyAmountField control={control} name="flexibleAllocation" label="Flexible allocation" prefix="Rp" description="Day-to-day and period spending." className="field" />
+                <CurrencyAmountField control={control} name="plannedAllocation" label="Planned allocation" prefix="Rp" description="Bills and future commitments." className="field" />
               </Grid>
               <Grid className="allocation-equation" columns={{ minWidth: 120, max: 4 }} gap={2} role="status">
                 <Stack className="allocation-equation-item" direction="vertical" gap={1}><span>Protected reserve</span><strong>{formatIdr(Number(values.reserveAmount) || 0)}</strong></Stack>
@@ -276,7 +276,7 @@ export function BudgetPage() {
                       <Grid className="category-settings-grid" columns={{ minWidth: 160, max: 2 }} gap={2}>
                         <AstryxSelectField control={control} name={`categories.${index}.mode`} label="Mode" options={[{ value: 'DAILY', label: 'Daily' }, { value: 'PERIOD', label: 'Period' }, { value: 'SCHEDULED', label: 'Scheduled' }]} onValueChange={(value) => { if (value === 'DAILY') setValue(`categories.${index}.bucket`, 'FLEXIBLE'); if (value === 'SCHEDULED') setValue(`categories.${index}.bucket`, 'PLANNED'); if (value !== 'SCHEDULED') setValue(`categories.${index}.defaultCadence`, '') }} className="field" />
                         <AstryxSelectField control={control} name={`categories.${index}.bucket`} label="Bucket" options={[{ value: 'FLEXIBLE', label: 'Flexible' }, { value: 'PLANNED', label: 'Planned' }]} className="field" />
-                        <AstryxNumberField control={control} name={`categories.${index}.allocation`} label="Allocation" prefix="Rp" min={0} className="field" />
+                        <CurrencyAmountField control={control} name={`categories.${index}.allocation`} label="Allocation" prefix="Rp" className="field" />
                         <AstryxColorField control={control} name={`categories.${index}.color`} label="Color" className="field" />
                         {values.categories?.[index]?.mode === 'SCHEDULED' && <AstryxSelectField control={control} name={`categories.${index}.defaultCadence`} label="Default repeat" options={[{ value: '', label: 'No default' }, { value: 'WEEKLY', label: 'Weekly' }, { value: 'MONTHLY', label: 'Monthly' }]} className="field default-cadence-field" />}
                       </Grid>
@@ -306,6 +306,6 @@ export function BudgetPage() {
           setCategoryToRemove(null)
         }}
       />
-    </main>
+    </Stack>
   )
 }

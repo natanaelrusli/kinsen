@@ -3,6 +3,19 @@ const idr = new Intl.NumberFormat('id-ID', {
   currency: 'IDR',
   maximumFractionDigits: 0,
 })
+const groupedNumberFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 20 })
+const groupedNumericTextPattern = /^(-?)(\d+)(?:\.(\d*))?$/
+
+export function formatGroupedAmount(value: number | string): string {
+  if (typeof value === 'number') return groupedNumberFormatter.format(value)
+  const match = groupedNumericTextPattern.exec(value)
+  if (!match) return value
+  const sign = match[1] ?? ''
+  const integer = match[2] ?? ''
+  const fraction = match[3]
+  return `${sign}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${fraction === undefined ? '' : `.${fraction}`}`
+}
+
 
 export function formatIdr(amount: number): string {
   return idr.format(amount)

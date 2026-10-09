@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '@astryxdesign/core/Button'
+import { useToast } from '@astryxdesign/core/Toast'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Stack } from '@astryxdesign/core/Stack'
 import type { DateOnly, Transaction } from '@kinsen/budget-domain'
@@ -11,7 +12,7 @@ import { formatDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { newId } from '../../shared/format/id'
 import { FormDialog } from '../../shared/components/FormDialog'
-import { AstryxDateField, AstryxNumberField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
+import { AstryxDateField, CurrencyAmountField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { useAssetStore } from '../../shared/state/asset-store'
 
@@ -48,6 +49,7 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
   const snapshot = useBudgetStore((state) => state.snapshot)
   const overview = useBudgetStore((state) => state.overview)
   const runMutation = useBudgetStore((state) => state.runMutation)
+  const toast = useToast()
   const saving = useBudgetStore((state) => state.saving)
   const assetData = useAssetStore((state) => state.data)
   const assetStatus = useAssetStore((state) => state.status)
@@ -128,6 +130,7 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
     try {
       await runMutation((useCases) => useCases.saveTransaction(transaction, values.paidFromAssetId || null))
       if (linkedAssetEntry || values.paidFromAssetId) void useAssetStore.getState().refresh().catch(() => undefined)
+      if (!initial) toast({ body: 'Expense added', uniqueID: 'expense-added' })
       onClose()
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Expense could not be saved.')
@@ -140,7 +143,7 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
 
   return (
     <FormDialog open={open} title={initial ? 'Edit expense' : 'Add expense'} description="Actual spending updates your safe-to-spend amount right away." onClose={onClose}>
-      <form ref={formRef} className="form-stack" onSubmit={onSubmit} noValidate>
+      <form ref={formRef} className="form-stack transaction-form" onSubmit={onSubmit} noValidate>
         {validationAttempt > 0 && validationIssues.length > 0 && (
           <section
             ref={errorSummaryRef}
@@ -160,13 +163,13 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
         )}
 
         <section className="form-section" aria-labelledby="transaction-details-title">
-          <Stack className="section-title-row" direction="vertical" gap={1}>
+          <CurrencyAmountField control={control} name="amount" label="Amount" prefix={<span aria-hidden="true">Rp</span>} description="Whole rupiah only." className="field transaction-amount-control" />
+          <Stack className="section-title-row transaction-details-heading" direction="vertical" gap={1}>
             <h2 id="transaction-details-title">Expense details</h2>
-            <p>Capture what you spent, the category, and the date.</p>
+            <p>Add a description, category, and date.</p>
           </Stack>
           <Stack direction="vertical" gap={3}>
             <AstryxTextField control={control} name="description" label="Description" autoComplete="off" maxLength={100} className="field" />
-            <AstryxNumberField control={control} name="amount" label="Amount" prefix={<span aria-hidden="true">Rp</span>} min={1} description="Whole rupiah only." className="field" />
             <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
               <AstryxSelectField
                 control={control}
@@ -194,10 +197,13 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
               isOptional
               placeholder="Not linked"
               description="Linking an expense pays down that commitment; the expense is never counted twice."
-              options={eligibleOccurrences.map((occurrence) => ({
-                value: `${occurrence.plannedExpenseId}|${occurrence.dueDate}`,
-                label: `${occurrence.name} · ${formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })} · ${formatIdr(occurrence.outstandingAmount)} left`,
-              }))}
+              options={[
+                { value: '', label: 'Not linked' },
+                ...eligibleOccurrences.map((occurrence) => ({
+                  value: `${occurrence.plannedExpenseId}|${occurrence.dueDate}`,
+                  label: `${occurrence.name} · ${formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })} · ${formatIdr(occurrence.outstandingAmount)} left`,
+                })),
+              ]}
               onValueChange={(value) => {
                 const occurrence = eligibleOccurrences.find((item) => `${item.plannedExpenseId}|${item.dueDate}` === value)
                 if (occurrence) setValue('categoryId', occurrence.categoryId, { shouldValidate: true })

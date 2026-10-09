@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateAssetPeriodComparison,
+  calculateGoldValueIdr,
+  createGoldValuation,
+  normalizeGoldDecimal,
   calculateFinancialPosition,
   convertMinorUnitsToIdr,
   daysSince,
@@ -39,6 +42,37 @@ function baseData(): AssetData {
   ]
   return { assets: [bank, wallet, fund], assetEntries, valuations, liabilities: [], liabilityEntries: [] }
 }
+
+describe('automatic gold snapshots', () => {
+  const gold: AssetAccount = {
+    ...fund, id: 'gold', type: 'GOLD',
+    goldPricing: { source: 'logammulia', materialType: 'Emas Batangan', weightGrams: '5', lineKey: '', units: '2', revision: 'one' },
+  }
+  const quote = { source: 'logammulia' as const, materialType: 'Emas Batangan', weightGrams: '5', lineKey: '', displayName: 'Antam', sellPrice: 12_600_000, recordedDate: '2024-01-15' }
+  it('uses exact package arithmetic and rejects unsafe or ambiguous decimals', () => {
+    expect(calculateGoldValueIdr('2', 12_600_000)).toBe(25_200_000)
+    expect(calculateGoldValueIdr('0.5', 101)).toBe(51)
+    expect(calculateGoldValueIdr('0', 101)).toBe(0)
+    expect(normalizeGoldDecimal('0002.5000')).toBe('2.5')
+    for (const invalid of ['-1', '1e2', '1,000', '0.000000001', ' 2']) {
+      expect(() => normalizeGoldDecimal(invalid)).toThrow()
+    }
+    expect(() => calculateGoldValueIdr('9007199254740992', 1)).toThrow(/safely/)
+  })
+  it('freezes provenance, preserves earlier manual history and validates only gold math', () => {
+    const manual: AssetValuation = { id: 'old', assetId: gold.id, asOfDate: '2024-01-01', nativeAmountMinor: 100, nativeCurrency: 'IDR', exchangeRate: '1', rateDate: '2024-01-01', valueIdr: 100, quantity: '7', unitPrice: '3', source: 'MANUAL', recordedAt: 1 }
+    const imported = createGoldValuation(gold, quote, '2024-01-16', 2, 'new')
+    const data: AssetData = { assets: [gold], valuations: [manual, imported], assetEntries: [], liabilities: [], liabilityEntries: [] }
+    validateAssetData(data)
+    expect(imported.valueIdr).toBe(25_200_000)
+    expect(deriveAssetValue(gold, data, '2024-01-15')).toBe(100)
+    expect(deriveAssetValue(gold, data, '2024-01-16')).toBe(25_200_000)
+    expect(() => validateAssetData({ ...data, valuations: [{ ...imported, quantity: '3' }] })).toThrow(/gold value/)
+    validateAssetData({ ...data, assets: [{ ...gold, goldPricing: undefined, type: 'OTHER' }] })
+    expect(() => createGoldValuation(gold, { ...quote, weightGrams: '1' }, '2024-01-16', 3, 'bad')).toThrow(/match/)
+    expect(() => createGoldValuation(gold, quote, '2024-01-14', 3, 'bad')).toThrow(/dated/)
+  })
+})
 
 describe('asset domain calculations', () => {
   it('derives cash balances from dated entries and ignores future valuations', () => {

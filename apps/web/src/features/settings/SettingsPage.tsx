@@ -8,12 +8,14 @@ import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, type IconName } from '../../shared/components/Icon'
 import { colorModeOptions, cornerStyleOptions, dashboardSectionOptions, headingStyleOptions, surfaceStyleOptions, themeColorOptions, useSettingsStore } from '../../shared/state/settings-store'
+import { BankEmailSettings } from './BankEmailSettings'
 
 const categories: { value: string; label: string; description: string; icon: IconName }[] = [
   { value: 'appearance', label: 'Appearance', description: 'Colors, surfaces, and typography.', icon: 'appearance' },
   { value: 'layout', label: 'Layout & motion', description: 'Adjust spacing and interaction effects.', icon: 'settings' },
   { value: 'calendar', label: 'Calendar', description: 'Set up your preferred calendar week.', icon: 'calendar' },
   { value: 'dashboard', label: 'Dashboard', description: 'Choose the sections on your Overview.', icon: 'overview' },
+  { value: 'bank-email', label: 'Bank email import', description: 'Configure BCA transaction email preferences.', icon: 'receipt' },
 ]
 
 export function SettingsPage() {
@@ -56,7 +58,7 @@ export function SettingsPage() {
         <Text>Personalize your workspace, one detail at a time.</Text>
         <Stack direction="horizontal" gap={2} className="settings-save-note">
           <Icon name="check" aria-hidden="true" style={{ width: 'var(--spacing-4)', height: 'var(--spacing-4)' }} />
-          <Text type="supporting">Changes apply immediately and are saved on this device.</Text>
+          <Text type="supporting">{category.value === 'bank-email' ? 'Bank email configuration is saved on this device when you select Save.' : 'Changes apply immediately and are saved on this device.'}</Text>
         </Stack>
       </Stack>
 
@@ -163,6 +165,8 @@ export function SettingsPage() {
               <Button label="View dashboard" variant="secondary" href="/" />
             </Stack>
           )}
+
+          {category.value === 'bank-email' && <BankEmailSettings />}
         </Stack>
       </Stack>
     </Stack>

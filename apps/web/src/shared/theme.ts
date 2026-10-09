@@ -88,7 +88,7 @@ function createKinsenTheme(name: ThemeColor): DefinedTheme {
       '--color-sidebar-surface': ['#f3f2ef', '#1e2621'],
       '--color-sidebar-divider': ['#dfddd7', '#39453d'],
       '--color-sidebar-text': ['#292824', '#e8eee7'],
-      '--color-sidebar-muted': ['#716f69', '#aab9ad'],
+      '--color-sidebar-muted': 'var(--color-text-secondary)',
       '--color-sidebar-hover': ['#ebeae6', '#2d3830'],
       '--color-sidebar-selected': ['#ebeae6', '#344138'],
       '--color-sidebar-selected-hover': accent.soft,

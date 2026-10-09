@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { z } from 'zod'
@@ -11,6 +11,7 @@ import { CheckboxInput } from '@astryxdesign/core/CheckboxInput'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Selector } from '@astryxdesign/core/Selector'
 import {
+  CurrencyAmountField,
   AstryxDateField,
   AstryxSelectField,
   AstryxTextAreaField,
@@ -18,6 +19,13 @@ import {
 } from '../../shared/components/AstryxFields'
 import { FormWizardDialog } from '../../shared/components/FormWizard'
 import type { AssetOpeningRecord } from '../../infrastructure/repositories/asset-repository'
+import { Button } from '@astryxdesign/core/Button'
+import { Stack } from '@astryxdesign/core/Stack'
+import { Text } from '@astryxdesign/core/Text'
+import { calculateGoldValueIdr, createGoldValuation, goldPriceSources, normalizeGoldDecimal, type GoldPriceSource } from '@kinsen/budget-domain'
+import { useAssetStore } from '../../shared/state/asset-store'
+import { formatIdr } from '../../shared/format/money'
+import { goldProductKey, goldProductLabel, valuationOrder } from './GoldValueDetails'
 
 const ASSET_TYPES = ['CASH', 'BANK_ACCOUNT', 'E_WALLET', 'DEPOSIT', 'MUTUAL_FUND', 'STOCK_ETF', 'GOLD', 'FOREIGN_CURRENCY', 'OTHER'] as const satisfies readonly AssetType[]
 const LIABILITY_TYPES = ['CREDIT_CARD', 'PAY_LATER', 'INSTALLMENT', 'LOAN', 'OTHER'] as const satisfies readonly LiabilityType[]
@@ -51,6 +59,10 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
     openingDate: dateOnly,
     exchangeRate: z.string(),
     rateDate: dateOnly,
+    pricingMethod: z.enum(['MANUAL', 'AUTOMATIC']),
+    priceSource: z.string(),
+    goldProduct: z.string(),
+    units: z.string(),
   })
   type Values = z.infer<typeof schema>
   const defaults: Values = {
@@ -64,6 +76,10 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
     openingDate: initial?.createdAt ?? today,
     exchangeRate: (initial?.nativeCurrency ?? 'IDR') === 'IDR' ? '1' : '',
     rateDate: today,
+    pricingMethod: initial?.goldPricing ? 'AUTOMATIC' : 'MANUAL',
+    priceSource: initial?.goldPricing?.source ?? '',
+    goldProduct: initial?.goldPricing ? goldProductKey(initial.goldPricing) : '',
+    units: initial?.goldPricing?.units ?? '',
   }
   const { control, handleSubmit, reset, setValue, watch, trigger, setError, getValues } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: defaults })
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -71,11 +87,36 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
   const currency = watch('nativeCurrency')
   const isLedger = assetBalanceMode(assetType) === 'LEDGER'
   const isInitial = !initial
+  const automatic = assetType === 'GOLD' && watch('pricingMethod') === 'AUTOMATIC'
+  const priceSource = watch('priceSource') as GoldPriceSource | ''
+  const productKey = watch('goldProduct')
+  const units = watch('units')
+  const prices = useAssetStore(state => state.goldPrices)
+  const loadGoldPrices = useAssetStore(state => state.loadGoldPrices)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const quotes = priceSource ? prices[priceSource]?.quotes ?? [] : []
+  const selectedQuote = quotes.find(quote => goldProductKey(quote) === productKey)
+  let preview: string | null = null
+  try { if (selectedQuote) preview = formatIdr(calculateGoldValueIdr(units, selectedQuote.sellPrice)) } catch { /* Input validation is shown on submit. */ }
+  useEffect(() => {
+    if (!open || !automatic || !priceSource) return
+    let active = true
+    setCatalogLoading(true)
+    setCatalogError(null)
+    void loadGoldPrices(priceSource, retry > 0).catch(error => {
+      if (active) setCatalogError(error instanceof Error ? error.message : 'Gold prices are currently unavailable.')
+    }).finally(() => { if (active) setCatalogLoading(false) })
+    return () => { active = false }
+  }, [open, automatic, priceSource, loadGoldPrices, retry])
 
   useLayoutEffect(() => {
     if (!open) return
     setSubmitError(null)
     reset({ ...defaults, openingDate: today, rateDate: today })
+    setRetry(0)
+    setCatalogError(null)
   }, [open, initial, today, reset])
 
   const onSubmit = handleSubmit(async (values) => {
@@ -94,6 +135,27 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
         ...(values.purpose ? { purpose: values.purpose as AssetPurpose } : {}),
         ...(values.notes.trim() ? { notes: values.notes.trim() } : {}),
         ...(initial?.archivedAt ? { archivedAt: initial.archivedAt } : {}),
+      }
+      if (automatic) {
+        if (initial && initial.nativeCurrency !== 'IDR') throw new Error('Automatic pricing requires an IDR gold asset.')
+        const normalizedUnits = normalizeGoldDecimal(values.units)
+        const previous = initial?.goldPricing
+        const changed = !previous || goldProductKey(previous) !== values.goldProduct || previous.units !== normalizedUnits
+        if (!values.priceSource || !values.goldProduct) throw new Error('Choose a price source and an exact gold product.')
+        if (changed && (!selectedQuote || catalogError || catalogLoading)) throw new Error('A usable gold price is required. Retry gold prices and select your product.')
+        const product = selectedQuote ?? previous
+        if (!product || goldProductKey(product) !== values.goldProduct) throw new Error('Price unavailable for the selected gold product. Retry gold prices.')
+        asset.nativeCurrency = 'IDR'
+        asset.createdAt = initial?.createdAt ?? today
+        asset.goldPricing = { source: product.source, materialType: product.materialType, weightGrams: product.weightGrams, lineKey: product.lineKey, units: normalizedUnits, revision: changed ? crypto.randomUUID() : previous!.revision }
+        if (changed) {
+          if (!selectedQuote || selectedQuote.recordedDate > today) throw new Error("Gold price is dated after today's valuation date.")
+          const latest = useAssetStore.getState().data.valuations.filter(item => item.assetId === asset.id && item.asOfDate <= today && item.goldQuote && goldProductKey(item.goldQuote) === goldProductKey(selectedQuote)).sort(valuationOrder).at(-1)
+          if (latest?.goldQuote && selectedQuote.recordedDate < latest.goldQuote.recordedDate) throw new Error('Received an older gold price. Last saved value retained.')
+          await onSave(asset, { valuation: createGoldValuation(asset, selectedQuote, today, Date.now(), newId('valuation')) })
+        } else await onSave(asset)
+        onClose()
+        return
       }
       if (initial) {
         await onSave(asset)
@@ -170,24 +232,37 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
                 label="Currency"
                 className="field"
                 options={currencies.map((code) => ({ value: code, label: code }))}
-                isDisabled={isLedger}
+                isDisabled={isLedger || automatic}
                 onValueChange={(value) => setValue('exchangeRate', value === 'IDR' ? '1' : '')}
                 description="Cash-like ledger accounts use IDR. Use Foreign currency for manually converted FX holdings."
               />
             </Grid>
+            {assetType === 'GOLD' && <AstryxSelectField control={control} name="pricingMethod" label="Pricing method" options={[{ value: 'MANUAL', label: 'Manual value' }, ...(!initial || initial.nativeCurrency === 'IDR' ? [{ value: 'AUTOMATIC', label: 'Automatic gold price' }] : [])]} onValueChange={value => { if (value === 'AUTOMATIC') setValue('nativeCurrency', 'IDR') }} description={initial && initial.nativeCurrency !== 'IDR' ? 'Automatic pricing requires an IDR gold asset. This asset can still be valued manually.' : 'Automatic pricing uses the selected product’s retail purchase price.'} />}
           </>,
         },
         {
-          label: isInitial ? 'Opening value' : 'Notes',
-          fields: isInitial ? ['openingAmount', 'openingDate', 'exchangeRate', 'rateDate', 'notes'] : ['notes'],
+          label: automatic ? 'Gold pricing' : isInitial ? 'Opening value' : 'Notes',
+          fields: automatic ? ['priceSource', 'goldProduct', 'units', 'notes'] : isInitial ? ['openingAmount', 'openingDate', 'exchangeRate', 'rateDate', 'notes'] : ['notes'],
           content: <>
-            {isInitial && <>
+            {automatic && <Stack direction="vertical" gap={3}>
+              <AstryxSelectField control={control} name="priceSource" label="Price source" options={[{ value: '', label: 'Choose a price source' }, ...goldPriceSources.map(source => ({ value: source, label: source }))]} onValueChange={() => setValue('goldProduct', '')} />
+              <AstryxSelectField control={control} name="goldProduct" label="Gold product" options={[{ value: '', label: 'Choose a gold product' }, ...quotes.map(quote => ({ value: goldProductKey(quote), label: goldProductLabel(quote) })), ...(initial?.goldPricing && productKey === goldProductKey(initial.goldPricing) && !quotes.some(quote => goldProductKey(quote) === productKey) ? [{ value: productKey, label: `${goldProductLabel(initial.goldPricing)} · saved selection` }] : [])]} />
+              <AstryxTextField control={control} name="units" label="Units held" inputMode="decimal" description="Units are packages of the selected product, not grams." />
+              <Text>Retail purchase estimate: {preview ?? 'Select a product and enter units.'}</Text>
+              {selectedQuote && <Text type="supporting">Package price {formatIdr(selectedQuote.sellPrice)} · Quote date {selectedQuote.recordedDate}</Text>}
+              <Text type="supporting">Retail purchase estimate — not a buyback value.</Text>
+              {!initial && <Text type="supporting">Opening date: {today}. Automatic holdings start today.</Text>}
+              {catalogLoading && <Text role="status">Loading gold products…</Text>}
+              {catalogError && <Text role="alert">{catalogError} Entered details and saved selection are retained.</Text>}
+              {priceSource && <Button label="Retry gold prices" variant="secondary" isDisabled={catalogLoading} onClick={() => setRetry(value => value + 1)} />}
+            </Stack>}
+            {isInitial && !automatic && <>
               <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-                <AstryxTextField control={control} name="openingAmount" label="Opening value (manual estimate)" autoComplete="off" inputMode="decimal" placeholder="0" startContent={currency} className="field" />
+                <CurrencyAmountField control={control} name="openingAmount" label="Opening value (manual estimate)" autoComplete="off" inputMode="decimal" placeholder="0" prefix={currency} className="field" />
                 <AstryxDateField control={control} name="openingDate" label="Opening date" className="field" />
               </Grid>
               {!isLedger && currency !== 'IDR' && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-                <AstryxTextField control={control} name="exchangeRate" label={`IDR rate per ${currency}`} inputMode="decimal" placeholder="15000" description="Saved with this valuation; Kinsen does not refresh exchange rates." className="field" />
+                <CurrencyAmountField control={control} name="exchangeRate" label={`IDR rate per ${currency}`} inputMode="decimal" placeholder="15000" description="Saved with this valuation; Kinsen does not refresh exchange rates." className="field" />
                 <AstryxDateField control={control} name="rateDate" label="Rate date" className="field" />
               </Grid>}
             </>}
@@ -198,7 +273,7 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
       ]}
       validateStep={async (stepIndex, fields) => {
         if (!await trigger(fields as FieldPath<Values>[])) return false
-        if (!isInitial || stepIndex !== 1) return true
+        if (automatic || !isInitial || stepIndex !== 1) return true
         const values = getValues()
         let amountMinor: number
         try {
@@ -288,7 +363,7 @@ export function AssetActivityForm({ open, asset, initial, today = localToday(), 
               { value: 'DEBIT', label: 'Debit / withdrawal' },
               { value: 'CORRECTION', label: 'Correction' },
             ]} />
-            <AstryxTextField control={control} name="amount" label="Amount (IDR)" inputMode="decimal" placeholder="0" startContent="Rp" className="field" />
+            <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="decimal" placeholder="0" prefix="Rp" className="field" />
           </Grid>
           <AstryxDateField control={control} name="date" label="Date" className="field" />
         </>,
@@ -397,7 +472,7 @@ export function AssetValuationForm({ open, asset, latest, selectableAssets, late
         label: 'Value',
         fields: ['nativeAmount', 'asOfDate'],
         content: <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-          <AstryxTextField control={control} name="nativeAmount" label={`Native value (${currentAsset.nativeCurrency})`} inputMode="decimal" placeholder="0" className="field" />
+          <CurrencyAmountField control={control} name="nativeAmount" label={`Native value (${currentAsset.nativeCurrency})`} inputMode="decimal" placeholder="0" className="field" />
           <AstryxDateField control={control} name="asOfDate" label="Valuation date" onValueChange={() => { setConfirmOlder(false); setSubmitError(null) }} className="field" />
         </Grid>,
       },
@@ -406,12 +481,12 @@ export function AssetValuationForm({ open, asset, latest, selectableAssets, late
         fields: ['exchangeRate', 'rateDate', 'quantity', 'unitPrice'],
         content: <>
           {currentAsset.nativeCurrency !== 'IDR' && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-            <AstryxTextField control={control} name="exchangeRate" label={`IDR per ${currentAsset.nativeCurrency}`} inputMode="decimal" placeholder="Exchange rate" className="field" />
+            <CurrencyAmountField control={control} name="exchangeRate" label={`IDR per ${currentAsset.nativeCurrency}`} inputMode="decimal" placeholder="Exchange rate" className="field" />
             <AstryxDateField control={control} name="rateDate" label="Rate date" className="field" />
           </Grid>}
           <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
             <AstryxTextField control={control} name="quantity" label="Quantity" isOptional inputMode="decimal" placeholder="Exact decimal" maxLength={40} className="field" />
-            <AstryxTextField control={control} name="unitPrice" label="Unit price" isOptional inputMode="decimal" placeholder="Exact decimal" maxLength={40} className="field" />
+            <CurrencyAmountField control={control} name="unitPrice" label="Unit price" isOptional inputMode="decimal" placeholder="Exact decimal" maxLength={40} className="field" />
           </Grid>
           <p className="valuation-preview">Estimated IDR value <strong>{preview === null ? 'Enter a valid value and rate' : `Rp ${preview.toLocaleString('id-ID')}`}</strong></p>
         </>,
@@ -518,7 +593,7 @@ export function TransferForm({ open, accounts, sourceAssetId, today = localToday
         fields: ['amount', 'date', 'note'],
         content: <>
           <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-            <AstryxTextField control={control} name="amount" label="Amount" inputMode="numeric" placeholder="0" startContent="Rp" className="field" />
+            <CurrencyAmountField control={control} name="amount" label="Amount" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="date" label="Date" className="field" />
           </Grid>
           <AstryxTextField control={control} name="note" label="Note" isOptional maxLength={500} className="field" />
@@ -588,7 +663,7 @@ export function LiabilityForm({ open, initial, today = localToday(), saving, onC
         fields: initial ? ['notes'] : ['openingAmount', 'openingDate', 'notes'],
         content: <>
           {!initial && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-            <AstryxTextField control={control} name="openingAmount" label="Opening balance (IDR)" inputMode="numeric" placeholder="0" startContent="Rp" className="field" />
+            <CurrencyAmountField control={control} name="openingAmount" label="Opening balance (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="openingDate" label="As-of date" className="field" />
           </Grid>}
           <AstryxTextAreaField control={control} name="notes" label="Notes" isOptional maxLength={1000} rows={2} className="field" />
@@ -664,7 +739,7 @@ export function LiabilityActivityForm({ open, liability, initial, today = localT
               { value: 'INTEREST_OR_FEE', label: 'Interest / fee' },
               { value: 'CORRECTION', label: 'Correction' },
             ]} />
-            <AstryxTextField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" startContent="Rp" className="field" />
+            <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
           </Grid>
           <AstryxDateField control={control} name="date" label="Date" className="field" />
         </>,
@@ -752,7 +827,7 @@ export function LiabilityPaymentForm({ open, liability, accounts, assetBalances,
         fields: ['amount', 'date', 'note'],
         content: <>
           <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-            <AstryxTextField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" startContent="Rp" className="field" />
+            <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="date" label="Date" className="field" />
           </Grid>
           <AstryxTextField control={control} name="note" label="Note" isOptional maxLength={500} className="field" />

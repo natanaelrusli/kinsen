@@ -1,6 +1,8 @@
 import { clerkClient, clerkMiddleware, getAuth } from '@clerk/express'
 import express, { type ErrorRequestHandler, type Express, type Request, type RequestHandler, type Response } from 'express'
 import { ZodError, z } from 'zod'
+import { goldPriceSources } from '@kinsen/budget-domain'
+import { defaultGoldPriceReader, type GoldPriceReader } from '../services/gold-price-reader.js'
 import { BudgetValidationError, SnapshotConflictError, SqliteBudgetRepository } from '../repositories/sqlite-budget-repository.js'
 import { HttpError } from './errors.js'
 import { plannedExpenseSchema, saveBudgetSchema, snapshotSchema, transactionSchema } from './schemas.js'
@@ -32,6 +34,7 @@ export function createApiApp(
   repository: SqliteBudgetRepository,
   auth: ApiAuthProvider = clerkAuthProvider(),
   accountActions: ApiAccountActions = clerkAccountActions,
+  goldPrices: GoldPriceReader = defaultGoldPriceReader,
 ): Express {
   const app = express()
   app.use(auth.middleware)
@@ -54,6 +57,11 @@ export function createApiApp(
       return
     }
     next()
+  })
+  app.get('/api/gold-prices', async (request, response) => {
+    const source = z.enum(goldPriceSources).parse(request.query.source)
+    const prices = await goldPrices.getPrices(source)
+    response.set('Cache-Control', 'no-store').json(prices)
   })
   app.get('/api/budget', (_request, response) => {
     response.json({ snapshot: repository.getSnapshot(), dataGeneration: repository.getDataGeneration() })

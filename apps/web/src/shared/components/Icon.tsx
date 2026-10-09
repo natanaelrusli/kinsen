@@ -33,6 +33,7 @@ const glyphs = {
   external: ExternalLink,
   search: Search,
   appearance: Contrast,
+  more: Ellipsis,
 } satisfies Record<string, LucideIcon>
 
 export type IconName = keyof typeof glyphs
