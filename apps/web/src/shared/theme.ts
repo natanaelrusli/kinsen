@@ -1,6 +1,6 @@
-import { defineTheme, type DefinedTheme } from '@astryxdesign/core/theme'
+import { defineTheme, type DefinedTheme, type TypographyRole } from '@astryxdesign/core/theme'
 import { neutralTheme } from '@astryxdesign/theme-neutral'
-import type { AppPreferences, ThemeColor } from './state/settings-store'
+import type { AppPreferences, HeadingStyle, SurfaceStyle, ThemeColor } from './state/settings-store'
 import { lucideThemeIcons } from './components/Icon'
 
 type AccentPalette = {
@@ -93,7 +93,7 @@ function createKinsenTheme(name: ThemeColor): DefinedTheme {
       '--color-sidebar-selected': ['#ebeae6', '#344138'],
       '--color-sidebar-selected-hover': accent.soft,
       '--color-sidebar-accent-muted-hover': accent.soft,
-      '--color-sidebar-note': ['rgba(255, 255, 255, .62)', '#28322c'],
+      
       '--color-sidebar-accent': [accent.light, accent.dark],
       '--color-sidebar-accent-muted': accent.soft,
       '--color-swatch-evergreen': accents.evergreen.light,
@@ -104,6 +104,14 @@ function createKinsenTheme(name: ThemeColor): DefinedTheme {
       '--color-swatch-rose': accents.rose.light,
       '--color-swatch-slate': accents.slate.light,
       '--color-swatch-indigo': accents.indigo.light,
+      '--color-swatch-highlight-evergreen': accents.evergreen.highlight,
+      '--color-swatch-highlight-ocean': accents.ocean.highlight,
+      '--color-swatch-highlight-lilac': accents.lilac.highlight,
+      '--color-swatch-highlight-terracotta': accents.terracotta.highlight,
+      '--color-swatch-highlight-marigold': accents.marigold.highlight,
+      '--color-swatch-highlight-rose': accents.rose.highlight,
+      '--color-swatch-highlight-slate': accents.slate.highlight,
+      '--color-swatch-highlight-indigo': accents.indigo.highlight,
     },
   })
 }
@@ -136,20 +144,80 @@ const surfacePalettes = {
     secondary: ['#666666', '#b8b8b8'],
     border: ['#dedede', '#454545'],
   },
-} satisfies Record<string, Record<string, [string, string]>>
+  sand: {
+    body: ['#f7f1e6', '#231d14'],
+    surface: ['#fdf9f1', '#2e261a'],
+    muted: ['#f2e9d8', '#39301f'],
+    text: ['#3a2c19', '#f4ecdc'],
+    secondary: ['#7b6746', '#c9b795'],
+    border: ['#e7dbc3', '#4d4128'],
+  },
+  mint: {
+    body: ['#eef5f0', '#141d18'],
+    surface: ['#f7fcf8', '#1c2721'],
+    muted: ['#e2efe6', '#25322a'],
+    text: ['#1e3328', '#e4f0e7'],
+    secondary: ['#5a7263', '#a4c0ad'],
+    border: ['#d4e5d9', '#36473c'],
+  },
+  dusk: {
+    body: ['#f2f0f8', '#1a1725'],
+    surface: ['#faf8ff', '#241f33'],
+    muted: ['#e8e4f3', '#2f2942'],
+    text: ['#2b2340', '#eae5f6'],
+    secondary: ['#6b6188', '#b1a7cd'],
+    border: ['#ddd7ec', '#3f3757'],
+  },
+  paper: {
+    body: ['#ffffff', '#111111'],
+    surface: ['#ffffff', '#1c1c1c'],
+    muted: ['#f2f2f2', '#282828'],
+    text: ['#111111', '#f2f2f2'],
+    secondary: ['#5e5e5e', '#ababab'],
+    border: ['#e6e6e6', '#3a3a3a'],
+  },
+} satisfies Record<Exclude<SurfaceStyle, 'warm'>, Record<string, [string, string]>>
+
+/**
+ * Font pairings for the heading style preference. Astryx only sets the font-family
+ * tokens, so these use widely available system faces rather than webfonts.
+ */
+const fontPairings = {
+  editorial: {
+    heading: { family: 'Georgia', fallbacks: '"Iowan Old Style", "Times New Roman", serif' },
+    body: { family: 'ui-serif', fallbacks: 'Georgia, "Times New Roman", serif' },
+  },
+  modern: {
+    heading: { family: 'ui-sans-serif', fallbacks: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+    body: { family: 'ui-sans-serif', fallbacks: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+  },
+  grotesk: {
+    heading: { family: '"Helvetica Neue"', fallbacks: 'Helvetica, Arial, sans-serif' },
+    body: { family: 'ui-sans-serif', fallbacks: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
+  },
+  humanist: {
+    heading: { family: 'Optima', fallbacks: 'Candara, "Gill Sans", "Gill Sans MT", sans-serif' },
+    body: { family: 'Optima', fallbacks: 'Candara, "Gill Sans", "Gill Sans MT", sans-serif' },
+  },
+  rounded: {
+    heading: { family: 'ui-rounded', fallbacks: '"SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, sans-serif' },
+    body: { family: 'ui-rounded', fallbacks: '"SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, sans-serif' },
+  },
+  ledger: {
+    heading: { family: 'ui-monospace', fallbacks: '"SF Mono", "Roboto Mono", Menlo, monospace' },
+    body: { family: 'ui-monospace', fallbacks: '"SF Mono", "Roboto Mono", Menlo, monospace' },
+  },
+} satisfies Record<HeadingStyle, { heading: TypographyRole; body: TypographyRole }>
 
 export function createAppearanceTheme({ themeColor, surfaceStyle, cornerStyle, headingStyle }: Pick<AppPreferences, 'themeColor' | 'surfaceStyle' | 'cornerStyle' | 'headingStyle'>): DefinedTheme {
   const base = kinsenThemes[themeColor]
   const surface = surfaceStyle === 'warm' ? null : surfacePalettes[surfaceStyle]
+  const fonts = fontPairings[headingStyle]
   return defineTheme({
     name: `${base.name}-${surfaceStyle}-${cornerStyle}-${headingStyle}`,
     extends: base,
     radius: { base: 4, multiplier: cornerStyle === 'crisp' ? 0 : 1 },
-    typography: {
-      heading: headingStyle === 'editorial'
-        ? { family: 'Georgia', fallbacks: '"Times New Roman", serif' }
-        : { family: 'ui-sans-serif', fallbacks: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-    },
+    typography: fonts,
     tokens: surface ? {
       '--color-background-body': surface.body,
       '--color-background-surface': surface.surface,
@@ -176,7 +244,6 @@ export function createAppearanceTheme({ themeColor, surfaceStyle, cornerStyle, h
         '--color-sidebar-muted': surface.secondary,
         '--color-sidebar-hover': surface.muted,
         '--color-sidebar-selected': surface.muted,
-        '--color-sidebar-note': surface.surface,
       } : {}),
     },
   })

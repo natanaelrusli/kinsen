@@ -21,6 +21,7 @@ import type { SyncStatus } from '../../infrastructure/repositories/api-budget-re
 import { budgetRepository } from '../../infrastructure/repositories/api-budget-repository'
 import { setClerkTokenProvider } from '../../infrastructure/api/clerk-token-provider'
 import { Icon, type IconName } from './Icon'
+import { Celebration } from './Celebration'
 import { colorModeOptions, useSettingsStore, type ColorMode } from '../state/settings-store'
 
 type Destination = {
@@ -29,6 +30,8 @@ type Destination = {
   label: string
   icon: IconName
   keywords: string[]
+  /** Budget and account pages live in the Settings menu instead of the sidebar. */
+  inSidebar?: boolean
 }
 
 const destinations: Destination[] = [
@@ -38,10 +41,12 @@ const destinations: Destination[] = [
   { id: 'activity', to: '/activity', label: 'Activity', icon: 'activity', keywords: ['transactions', 'spending'] },
   { id: 'assets', to: '/assets', label: 'Assets', icon: 'assets', keywords: ['accounts', 'net worth'] },
   { id: 'electricity', to: '/electricity', label: 'PLN Token Tracker', icon: 'electricity', keywords: ['pln', 'token', 'electricity', 'meter', 'kwh'] },
-  { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories'] },
+  { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories'], inSidebar: false },
   { id: 'settings', to: '/settings', label: 'Settings', icon: 'settings', keywords: ['preferences', 'appearance'] },
-  { id: 'account', to: '/account', label: 'Account settings', icon: 'settings', keywords: ['profile', 'account'] },
+  { id: 'account', to: '/account', label: 'Account settings', icon: 'wallet', keywords: ['profile', 'account'], inSidebar: false },
 ]
+
+const sidebarDestinations = destinations.filter((destination) => destination.inSidebar !== false)
 
 const destinationsById = new Map(destinations.map((destination) => [destination.id, destination]))
 
@@ -129,14 +134,13 @@ function createNavigationTree(pathname: string): TreeListItemData[] {
       label: 'Manage',
       startContent: <Icon name="settings" size={18} />,
       isExpanded: true,
-      children: [item('budget'), item('settings'), item('account')],
+      children: [item('settings')],
     },
   ]
 }
 
 export function AppSidebar() {
   const location = useLocation()
-  const electricityLocalOnly = routeMatches(location.pathname, '/electricity')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const navigationTree = useMemo(
     () => createNavigationTree(location.pathname),
@@ -154,18 +158,10 @@ export function AppSidebar() {
         maxWidth: 400,
         isCollapsed: sidebarCollapsed,
         onCollapseChange: setSidebarCollapsed,
-      }}
-      footer={
-        <Stack className="app-nav-footer" gap={3}>
-          <Stack direction="horizontal" gap={2} className={`local-storage-note${sidebarCollapsed ? ' is-collapsed' : ''}`}>
-            <span className="storage-dot" aria-hidden="true" />
-            <span className={sidebarCollapsed ? 'sr-only' : undefined}>Saved on this device<br /><small>{electricityLocalOnly ? 'Electricity readings stay on this device' : 'Syncs when available'}</small></span>
-          </Stack>
-        </Stack>
-      }>
+      }}>
       {sidebarCollapsed ? (
         <SideNavSection className="app-side-nav-section" title="Your money">
-          {destinations.map((destination) => (
+          {sidebarDestinations.map((destination) => (
             <SideNavItem
               key={destination.id}
               href={destination.to}
@@ -272,6 +268,7 @@ function MobileNavigation() {
 export function AppShellChrome({
   layoutDensity,
   playfulMotion,
+  backdropStyle = 'plain',
   online,
   syncStatus,
   error,
@@ -281,6 +278,7 @@ export function AppShellChrome({
 }: {
   layoutDensity: string
   playfulMotion: boolean
+  backdropStyle?: string
   online: boolean
   syncStatus: SyncStatus
   error: string | null
@@ -328,6 +326,7 @@ export function AppShellChrome({
       <Stack as="section" className="app-workspace" gap={0}>
       <AstryxAppShell
         className={`app-frame${layoutDensity === 'compact' ? ' is-compact' : ''}${playfulMotion ? '' : ' is-motion-reduced'}`}
+        data-backdrop={backdropStyle === 'plain' ? undefined : backdropStyle}
         height="fill"
         variant="elevated"
         contentPadding={0}
@@ -384,6 +383,7 @@ export function AppShellChrome({
       </AstryxAppShell>
         <MobileNavigation />
       </Stack>
+      <Celebration />
       <CommandPalette
         isOpen={isPaletteOpen}
         onOpenChange={setIsPaletteOpen}
@@ -413,6 +413,9 @@ export function AppShellChrome({
 }
 
 export function AppShell() {
+  const { pathname } = useLocation()
+  // Settings manages two independent scroll columns instead of scrolling as one page.
+  const isSettingsRoute = routeMatches(pathname, '/settings')
   const initialize = useBudgetStore((state) => state.initialize)
   const initializeAssets = useAssetStore((state) => state.initialize)
   const error = useBudgetStore((state) => state.error)
@@ -421,6 +424,7 @@ export function AppShell() {
   const [online, setOnline] = useState(() => navigator.onLine)
   const layoutDensity = useSettingsStore((state) => state.layoutDensity)
   const playfulMotion = useSettingsStore((state) => state.playfulMotion)
+  const backdropStyle = useSettingsStore((state) => state.backdropStyle)
 
   useEffect(() => {
     setClerkTokenProvider(getToken)
@@ -446,12 +450,13 @@ export function AppShell() {
     <AppShellChrome
       layoutDensity={layoutDensity}
       playfulMotion={playfulMotion}
+      backdropStyle={backdropStyle}
       online={online}
       syncStatus={syncStatus}
       error={error}
       onRetry={() => void initialize()}
       accountControl={<UserButton />}>
-      <Stack className="page-content"><Outlet /></Stack>
+      <Stack className="page-content" data-scroll-panels={isSettingsRoute ? 'true' : undefined}><Outlet /></Stack>
     </AppShellChrome>
   )
 }

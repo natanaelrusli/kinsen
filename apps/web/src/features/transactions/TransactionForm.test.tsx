@@ -1,10 +1,17 @@
 import userEvent from '@testing-library/user-event'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+
+// The real toast renders into an async fallback root, so assert on the call instead.
+const toastCalls: Array<{ body?: string; uniqueID?: string }> = []
+vi.mock('@astryxdesign/core/Toast', () => ({
+  useToast: () => (options: { body?: string; uniqueID?: string }) => { toastCalls.push(options) },
+}))
 import { calculateOverview, createSampleSnapshot } from '@kinsen/budget-domain'
 import type { DateOnly, Transaction } from '@kinsen/budget-domain'
 import type { BudgetUseCases } from '../../application/use-cases/budget-use-cases'
 import { useAssetStore } from '../../shared/state/asset-store'
 import { useBudgetStore } from '../../shared/state/budget-store'
+import { defaultPreferences, useSettingsStore } from '../../shared/state/settings-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TransactionForm } from './TransactionForm'
 
@@ -29,6 +36,7 @@ beforeEach(() => {
   const snapshot = createSampleSnapshot(today)
   snapshot.transactions.push(originalTransaction)
   saveTransactionCalls.length = 0
+  toastCalls.length = 0
   const runMutation = vi.fn(async (operation: (useCases: BudgetUseCases) => Promise<void>) =>
     operation({ saveTransaction } as unknown as BudgetUseCases))
   useBudgetStore.setState({
@@ -47,6 +55,7 @@ afterEach(() => {
   cleanup()
   useBudgetStore.setState(useBudgetStore.getInitialState(), true)
   useAssetStore.setState(useAssetStore.getInitialState(), true)
+  useSettingsStore.setState(defaultPreferences)
 })
 
 describe('TransactionForm behavior', () => {
@@ -80,6 +89,36 @@ describe('TransactionForm behavior', () => {
       paidFromAssetId: null,
     }])
   })
+  it('announces the save for the celebration instead of showing the toast when a celebration will be visible', async () => {
+    const user = userEvent.setup()
+    const saved = vi.fn()
+    window.addEventListener('kinsen:expense-saved', saved)
+    render(<TransactionForm open onClose={vi.fn()} />)
+
+    await user.type(screen.getByRole('textbox', { name: 'Description' }), 'Kopi')
+    await user.type(screen.getByRole('textbox', { name: 'Amount' }), '25000')
+    await user.click(screen.getByRole('button', { name: 'Save expense' }))
+
+    await waitFor(() => expect(saveTransactionCalls).toHaveLength(1))
+    expect(saved).toHaveBeenCalledTimes(1)
+    expect(toastCalls).toEqual([])
+    window.removeEventListener('kinsen:expense-saved', saved)
+  })
+
+  it('falls back to the toast when the celebration would be silent', async () => {
+    useSettingsStore.setState({ ...defaultPreferences, cheerTone: 'off', playfulMotion: false })
+    const user = userEvent.setup()
+    render(<TransactionForm open onClose={vi.fn()} />)
+
+    await user.type(screen.getByRole('textbox', { name: 'Description' }), 'Kopi')
+    await user.type(screen.getByRole('textbox', { name: 'Amount' }), '25000')
+    await user.click(screen.getByRole('button', { name: 'Save expense' }))
+
+    await waitFor(() => expect(saveTransactionCalls).toHaveLength(1))
+    // The event still fires so the celebration stays in sync; the toast covers the silent case.
+    expect(toastCalls).toEqual([{ body: 'Expense added', uniqueID: 'expense-added' }])
+  })
+
   it.each([
     { value: '-500', error: 'Amount must be greater than zero.' },
     { value: '0.5', error: 'Use whole rupiah only.' },

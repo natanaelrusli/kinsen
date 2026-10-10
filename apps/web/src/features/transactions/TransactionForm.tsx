@@ -10,9 +10,11 @@ import { formatDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { newId } from '../../shared/format/id'
 import { DialogForm, DialogFormSection } from '../../shared/components/DialogForm'
+import { announceExpenseSaved } from '../../shared/components/Celebration'
 import { AstryxDateField, CurrencyAmountField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { useAssetStore } from '../../shared/state/asset-store'
+import { celebrationShowsFeedback, useSettingsStore } from '../../shared/state/settings-store'
 
 const transactionSchema = z.object({
   description: z.string().trim().min(1, 'Add a short description.').max(100, 'Keep the description under 100 characters.'),
@@ -113,7 +115,11 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
     try {
       await runMutation((useCases) => useCases.saveTransaction(transaction, values.paidFromAssetId || null))
       if (linkedAssetEntry || values.paidFromAssetId) void useAssetStore.getState().refresh().catch(() => undefined)
-      if (!initial) toast({ body: 'Expense added', uniqueID: 'expense-added' })
+      if (!initial) {
+        // The celebration replaces the toast whenever it will actually be visible.
+        if (!celebrationShowsFeedback(useSettingsStore.getState())) toast({ body: 'Expense added', uniqueID: 'expense-added' })
+        announceExpenseSaved()
+      }
       onClose()
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Expense could not be saved.')

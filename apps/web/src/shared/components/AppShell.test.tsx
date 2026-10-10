@@ -34,6 +34,35 @@ afterEach(() => {
 })
 
 describe('AppShell navigation', () => {
+  it('marks the settings route as managing its own scroll columns', () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="settings" element={<h1>Settings page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Settings needs two independently scrolling columns, so the page wrapper must fill the scrollport.
+    expect(document.querySelector('.page-content')).toHaveAttribute('data-scroll-panels', 'true')
+    unmount()
+
+    render(
+      <MemoryRouter initialEntries={['/assets']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="assets" element={<h1>Assets page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Other pages scroll as one document, so they must not opt into panel scrolling.
+    expect(document.querySelector('.page-content')).not.toHaveAttribute('data-scroll-panels')
+  })
+
   it('marks the active destination and preserves access while the sidebar collapses', () => {
     render(
       <MemoryRouter initialEntries={['/assets']}>

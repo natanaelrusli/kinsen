@@ -3,6 +3,7 @@ import { ClerkProvider } from '@clerk/react'
 import { resolveThemeTokens, Theme } from '@astryxdesign/core/theme'
 import { createAppearanceTheme } from '../theme'
 import { useSettingsStore } from '../state/settings-store'
+import { setMoneyStyle } from '../format/money'
 
 const systemColorScheme = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
   ? window.matchMedia('(prefers-color-scheme: dark)')
@@ -18,6 +19,7 @@ function syncRootAppearance(mode: 'light' | 'dark', themeName: string) {
 // Apply saved preferences before React paints; Theme injects its palette during mount.
 export function initializeAppTheme() {
   const preferences = useSettingsStore.getState()
+  setMoneyStyle(preferences.moneyStyle)
   syncRootAppearance(preferences.colorMode === 'system' ? (systemColorScheme?.matches ? 'dark' : 'light') : preferences.colorMode, createAppearanceTheme(preferences).name)
 }
 
@@ -27,7 +29,12 @@ export function AppTheme({ children, withAuth = false }: { children: ReactNode; 
   const surfaceStyle = useSettingsStore((state) => state.surfaceStyle)
   const cornerStyle = useSettingsStore((state) => state.cornerStyle)
   const headingStyle = useSettingsStore((state) => state.headingStyle)
+  const moneyStyle = useSettingsStore((state) => state.moneyStyle)
   const theme = useMemo(() => createAppearanceTheme({ themeColor, surfaceStyle, cornerStyle, headingStyle }), [themeColor, surfaceStyle, cornerStyle, headingStyle])
+
+  useLayoutEffect(() => {
+    setMoneyStyle(moneyStyle)
+  }, [moneyStyle])
   const subscribe = useCallback((onChange: () => void) => {
     if (colorMode !== 'system' || !systemColorScheme) return () => {}
     systemColorScheme.addEventListener('change', onChange)
