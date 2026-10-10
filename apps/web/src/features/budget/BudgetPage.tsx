@@ -9,10 +9,10 @@ import { formatDate, localToday } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { newId } from '../../shared/format/id'
 import { Button } from '@astryxdesign/core/Button'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { AstryxColorField, AstryxDateField, CurrencyAmountField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Stack } from '@astryxdesign/core/Stack'
 import { FormWizard } from '../../shared/components/FormWizard'
@@ -190,7 +190,7 @@ export function BudgetPage() {
     }
   })
 
-  if (status === 'loading') return <Spinner className="loading-state" label="Loading your budget" size="md" />
+  if (status === 'loading') return <PageSkeleton variant="form" label="Loading your budget" />
   if (status === 'error' || !snapshot) return <LoadErrorState onRetry={() => void initialize()} />
   const dateRange = `${formatDate(currentPeriod.startDate)} — ${formatDate(currentPeriod.endDate)}`
   const categoryErrors = [

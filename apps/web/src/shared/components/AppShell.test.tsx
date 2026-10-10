@@ -91,6 +91,32 @@ describe('AppShell navigation', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false')
     expect(more).toHaveFocus()
   })
+  it('offers the PLN tracker in More and marks its status as local-only', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/assets']}>
+        <LinkProvider component={RouterLink}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="assets" element={<h1>Assets page</h1>} />
+              <Route path="electricity" element={<h1>PLN Token Tracker page</h1>} />
+            </Route>
+          </Routes>
+        </LinkProvider>
+      </MemoryRouter>,
+    )
+
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }))
+    const more = navigation.getByRole('button', { name: 'More' })
+    await user.click(more)
+    const tracker = navigation.getByRole('link', { name: 'PLN Token Tracker' })
+    expect(tracker).toHaveAttribute('href', '/electricity')
+    await user.click(tracker)
+
+    expect(screen.getByRole('heading', { name: 'PLN Token Tracker page' })).toBeInTheDocument()
+    expect(document.querySelector('.topbar-status')).toHaveTextContent('Local only')
+    expect(more).toHaveAttribute('data-active', 'true')
+  })
 })
 
 describe('AppShell command search', () => {

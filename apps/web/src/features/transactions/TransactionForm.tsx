@@ -1,17 +1,15 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Button } from '@astryxdesign/core/Button'
 import { useToast } from '@astryxdesign/core/Toast'
 import { Grid } from '@astryxdesign/core/Grid'
-import { Stack } from '@astryxdesign/core/Stack'
 import type { DateOnly, Transaction } from '@kinsen/budget-domain'
 import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { formatDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { newId } from '../../shared/format/id'
-import { FormDialog } from '../../shared/components/FormDialog'
+import { DialogForm, DialogFormSection } from '../../shared/components/DialogForm'
 import { AstryxDateField, CurrencyAmountField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { useAssetStore } from '../../shared/state/asset-store'
@@ -62,9 +60,6 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
   }, [open, assetStatus, initializeAssets])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [validationAttempt, setValidationAttempt] = useState(0)
-  const errorSummaryRef = useRef<HTMLElement | null>(null)
-  const formRef = useRef<HTMLFormElement | null>(null)
-  const pendingValidationFocusRef = useRef(false)
   const period = snapshot?.period
   const occurrences = overview?.occurrences ?? []
   const today = overview?.today ?? period?.startDate ?? ''
@@ -91,25 +86,13 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
     if (!open) return
     setSubmitError(null)
     setValidationAttempt(0)
-    pendingValidationFocusRef.current = false
     reset(defaultValues)
-    if (formRef.current) formRef.current.scrollTop = 0
-    if (typeof window.requestAnimationFrame !== 'function') return
-    const frame = window.requestAnimationFrame(() => {
-      if (formRef.current) formRef.current.scrollTop = 0
-    })
-    return () => window.cancelAnimationFrame(frame)
   }, [open, initial, initialDate, linkedOccurrence?.plannedExpenseId, linkedOccurrence?.dueDate, paidFromAssetId, reset])
 
   const validationIssues = TRANSACTION_FORM_FIELDS.flatMap(({ name, label }) => {
     const message = errors[name]?.message
     return typeof message === 'string' ? [{ name, label, message }] : []
   })
-  useLayoutEffect(() => {
-    if (!pendingValidationFocusRef.current || validationIssues.length === 0) return
-    pendingValidationFocusRef.current = false
-    errorSummaryRef.current?.focus()
-  }, [validationAttempt, validationIssues.length])
 
   const eligibleOccurrences = occurrences.filter((item) => item.outstandingAmount > 0 || (initial?.plannedExpenseId === item.plannedExpenseId && initial.plannedOccurrenceDate === item.dueDate))
   const categories = snapshot?.categories ?? []
@@ -136,60 +119,44 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
       setSubmitError(error instanceof Error ? error.message : 'Expense could not be saved.')
     }
   }, () => {
-    pendingValidationFocusRef.current = true
     setSubmitError(null)
     setValidationAttempt((attempt) => attempt + 1)
   })
 
   return (
-    <FormDialog open={open} title={initial ? 'Edit expense' : 'Add expense'} description="Actual spending updates your safe-to-spend amount right away." onClose={onClose}>
-      <form ref={formRef} className="form-stack transaction-form" onSubmit={onSubmit} noValidate>
-        {validationAttempt > 0 && validationIssues.length > 0 && (
-          <section
-            ref={errorSummaryRef}
-            className="form-error"
-            role="alert"
-            aria-labelledby="transaction-error-summary-title"
-            tabIndex={-1}
-          >
-            <strong id="transaction-error-summary-title">Review these fields</strong>
-            <p>{validationIssues.length === 1 ? 'There is 1 field to check.' : `There are ${validationIssues.length} fields to check.`} Review the field messages below.</p>
-            <ul>
-              {validationIssues.map((issue) => (
-                <li key={issue.name}><strong>{issue.label}:</strong> {issue.message}</li>
-              ))}
-            </ul>
-          </section>
-        )}
+    <DialogForm
+      open={open}
+      title={initial ? 'Edit expense' : 'Add expense'}
+      description="Actual spending updates your safe-to-spend amount right away."
+      className="form-stack transaction-form"
+      errorIssues={validationAttempt > 0 ? validationIssues : []}
+      submitError={submitError}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      saving={saving}
+      submitLabel={assetStatus === 'loading' && initial ? 'Loading accounts…' : 'Save expense'}
+      isSubmitDisabled={Boolean(initial && assetStatus !== 'ready')}
+    >
+      <DialogFormSection
+        title="Expense details"
+        description="Add a description, category, and date."
+        lead={<CurrencyAmountField control={control} name="amount" label="Amount" prefix={<span aria-hidden="true">Rp</span>} description="Whole rupiah only." className="field dialog-form-amount-control" />}
+      >
+        <AstryxTextField control={control} name="description" label="Description" autoComplete="off" maxLength={100} className="field" />
+        <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <AstryxSelectField
+            control={control}
+            name="categoryId"
+            label="Category"
+            placeholder="Choose category"
+            options={categories.map((category) => ({ value: category.id, label: category.name }))}
+            className="field"
+          />
+          <AstryxDateField control={control} name="date" label="Date" min={period?.startDate} max={period?.endDate} className="field" />
+        </Grid>
+      </DialogFormSection>
 
-        <section className="form-section" aria-labelledby="transaction-details-title">
-          <CurrencyAmountField control={control} name="amount" label="Amount" prefix={<span aria-hidden="true">Rp</span>} description="Whole rupiah only." className="field transaction-amount-control" />
-          <Stack className="section-title-row transaction-details-heading" direction="vertical" gap={1}>
-            <h2 id="transaction-details-title">Expense details</h2>
-            <p>Add a description, category, and date.</p>
-          </Stack>
-          <Stack direction="vertical" gap={3}>
-            <AstryxTextField control={control} name="description" label="Description" autoComplete="off" maxLength={100} className="field" />
-            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
-              <AstryxSelectField
-                control={control}
-                name="categoryId"
-                label="Category"
-                placeholder="Choose category"
-                options={categories.map((category) => ({ value: category.id, label: category.name }))}
-                className="field"
-              />
-              <AstryxDateField control={control} name="date" label="Date" min={period?.startDate} max={period?.endDate} className="field" />
-            </Grid>
-          </Stack>
-        </section>
-
-        <section className="form-section" aria-labelledby="transaction-links-title">
-          <Stack className="section-title-row" direction="vertical" gap={1}>
-            <h2 id="transaction-links-title">Optional links</h2>
-            <p>Connect this expense to a planned bill or a tracked cash account if needed.</p>
-          </Stack>
-          <Stack direction="vertical" gap={3}>
+      <DialogFormSection title="Optional links" description="Connect this expense to a planned bill or a tracked cash account if needed.">
             <AstryxSelectField
               control={control}
               name="commitmentKey"
@@ -223,24 +190,8 @@ export function TransactionForm({ open, initial = null, initialDate, linkedOccur
               className="field"
             />
             {assetStatus === 'error' && <p className="field-error" role="alert">{initial ? 'Tracked accounts could not be loaded. Reopen after storage is available to preserve any existing Paid from link.' : 'Tracked accounts could not be loaded. You can still save this expense without a Paid from link.'}</p>}
-          </Stack>
-        </section>
-
-        {submitError && <p className="form-error" role="alert">{submitError}</p>}
-
-        <footer className="form-actions">
-          <Button label="Cancel" type="button" variant="ghost" className="button button-outline" onClick={onClose} isDisabled={saving} />
-          <Button
-            label={saving ? 'Saving…' : assetStatus === 'loading' && initial ? 'Loading accounts…' : 'Save expense'}
-            type="submit"
-            variant="primary"
-            className="button button-primary"
-            isDisabled={saving || Boolean(initial && assetStatus !== 'ready')}
-            isLoading={saving}
-          />
-        </footer>
-      </form>
-    </FormDialog>
+      </DialogFormSection>
+    </DialogForm>
   )
 }
 

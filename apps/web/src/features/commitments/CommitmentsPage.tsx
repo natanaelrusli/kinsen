@@ -1,11 +1,11 @@
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { useState } from 'react'
 import type { PlannedExpense, PlannedOccurrence } from '@kinsen/budget-domain'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { PlannedExpenseForm } from './PlannedExpenseForm'
 import { CommitmentCard } from './CommitmentCard'
@@ -24,7 +24,7 @@ export function CommitmentsPage() {
   const [confirmingExpense, setConfirmingExpense] = useState<PlannedExpense | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (status === 'loading') return <Spinner className="loading-state" label="Loading your commitments" size="md" />
+  if (status === 'loading') return <PageSkeleton variant="list" label="Loading your commitments" />
   if (status === 'error' || !snapshot || !overview) return <LoadErrorState onRetry={() => void initialize()} />
   const outstandingRows = overview.occurrences.filter((occurrence) => occurrence.outstandingAmount > 0)
   const overdueCount = outstandingRows.filter((occurrence) => occurrence.dueDate < overview.today).length

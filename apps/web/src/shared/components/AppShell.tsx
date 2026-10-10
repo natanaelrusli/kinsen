@@ -37,6 +37,7 @@ const destinations: Destination[] = [
   { id: 'commitments', to: '/commitments', label: 'Commitments', icon: 'commitments', keywords: ['bills', 'recurring'] },
   { id: 'activity', to: '/activity', label: 'Activity', icon: 'activity', keywords: ['transactions', 'spending'] },
   { id: 'assets', to: '/assets', label: 'Assets', icon: 'assets', keywords: ['accounts', 'net worth'] },
+  { id: 'electricity', to: '/electricity', label: 'PLN Token Tracker', icon: 'electricity', keywords: ['pln', 'token', 'electricity', 'meter', 'kwh'] },
   { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories'] },
   { id: 'settings', to: '/settings', label: 'Settings', icon: 'settings', keywords: ['preferences', 'appearance'] },
   { id: 'account', to: '/account', label: 'Account settings', icon: 'settings', keywords: ['profile', 'account'] },
@@ -122,6 +123,7 @@ function createNavigationTree(pathname: string): TreeListItemData[] {
     },
     item('activity'),
     item('assets'),
+    item('electricity'),
     {
       id: 'manage',
       label: 'Manage',
@@ -134,6 +136,7 @@ function createNavigationTree(pathname: string): TreeListItemData[] {
 
 export function AppSidebar() {
   const location = useLocation()
+  const electricityLocalOnly = routeMatches(location.pathname, '/electricity')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const navigationTree = useMemo(
     () => createNavigationTree(location.pathname),
@@ -156,7 +159,7 @@ export function AppSidebar() {
         <Stack className="app-nav-footer" gap={3}>
           <Stack direction="horizontal" gap={2} className={`local-storage-note${sidebarCollapsed ? ' is-collapsed' : ''}`}>
             <span className="storage-dot" aria-hidden="true" />
-            <span className={sidebarCollapsed ? 'sr-only' : undefined}>Saved on this device<br /><small>Syncs when available</small></span>
+            <span className={sidebarCollapsed ? 'sr-only' : undefined}>Saved on this device<br /><small>{electricityLocalOnly ? 'Electricity readings stay on this device' : 'Syncs when available'}</small></span>
           </Stack>
         </Stack>
       }>
@@ -293,6 +296,10 @@ export function AppShellChrome({
   const setColorMode = useSettingsStore((state) => state.setColorMode)
   const currentPage = destinations.find((destination) => routeMatches(pathname, destination.to, destination.to === '/'))?.label
   const hasSyncProblem = syncStatus === 'CONFLICT' || syncStatus === 'ERROR' || syncStatus === 'ACCOUNT_MISMATCH'
+  const electricityLocalOnly = routeMatches(pathname, '/electricity')
+  const displayedSyncLabel = electricityLocalOnly ? 'Electricity readings saved on this device; not synced' : syncLabel(syncStatus, online)
+  const displayedSyncSummary = electricityLocalOnly ? 'Local only' : syncSummary(syncStatus, online)
+  const displayedSyncVariant = electricityLocalOnly ? 'neutral' : hasSyncProblem ? 'error' : !online || syncStatus === 'PENDING' || syncStatus === 'SYNCING' ? 'warning' : 'success'
   const previousPathname = useRef(pathname)
 
   useEffect(() => {
@@ -335,8 +342,8 @@ export function AppShellChrome({
             endContent={
               <Stack direction="horizontal" gap={2} vAlign="center" className="app-topbar-controls">
                 <Stack direction="horizontal" gap={2} vAlign="center" className="topbar-status" role="status" aria-live="polite">
-                  <StatusDot label={syncLabel(syncStatus, online)} variant={hasSyncProblem ? 'error' : !online || syncStatus === 'PENDING' || syncStatus === 'SYNCING' ? 'warning' : 'success'} />
-                  <Text type="supporting" className="topbar-status-copy" aria-hidden="true">{syncSummary(syncStatus, online)}</Text>
+                  <StatusDot label={displayedSyncLabel} variant={displayedSyncVariant} />
+                  <Text type="supporting" className="topbar-status-copy" aria-hidden="true">{displayedSyncSummary}</Text>
                 </Stack>
                 <Stack direction="horizontal" vAlign="center" className="app-command-search">
                   <Button

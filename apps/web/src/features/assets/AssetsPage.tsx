@@ -1,5 +1,4 @@
 import { Button } from '@astryxdesign/core/Button'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { Stack } from '@astryxdesign/core/Stack'
 import { useEffect, useMemo, useState } from 'react'
 import type { AssetAccount, AssetData, AssetEntry, AssetValuation, DateOnly } from '@kinsen/budget-domain'
@@ -8,6 +7,7 @@ import { useAssetStore } from '../../shared/state/asset-store'
 import { localToday } from '../../shared/format/date'
 import { Icon } from '../../shared/components/Icon'
 import { PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { AssetForm, AssetValuationForm, TransferForm } from './AssetForms'
 import { ArchivedAccountsSection } from './ArchivedAccountsSection'
 import { AssetBreakdowns } from './AssetBreakdowns'
@@ -60,7 +60,7 @@ export function AssetsPage() {
     setAssetDialog(false)
   }
 
-  if (status === 'idle' || status === 'loading') return <Spinner className="loading-state" label="Loading assets saved on this device" size="md" />
+  if (status === 'idle' || status === 'loading') return <PageSkeleton variant="assets" label="Loading assets saved on this device" />
   if (status === 'error') return <Stack className="asset-load-error" role="alert" style={{ display: 'block' }}><h2>Assets could not be loaded</h2><p>{error ?? 'Local storage is unavailable.'}</p><Button label="Try again" className="button button-secondary" variant="secondary" type="button" onClick={() => void initialize()} /></Stack>
 
   return <Stack as="section" className="assets-page" direction="vertical" gap={4}>

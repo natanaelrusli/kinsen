@@ -1,6 +1,5 @@
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigationType, useSearchParams } from 'react-router-dom'
@@ -8,6 +7,7 @@ import type { Transaction } from '@kinsen/budget-domain'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { TransactionForm } from './TransactionForm'
@@ -86,7 +86,7 @@ export function TransactionsPage() {
   const pageCount = Math.max(1, Math.ceil(matchingTransactions.length / RECORD_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const visibleTransactions = matchingTransactions.slice((currentPage - 1) * RECORD_PAGE_SIZE, currentPage * RECORD_PAGE_SIZE)
-  if (status === 'loading') return <Spinner className="loading-state" label="Loading your activity" size="md" />
+  if (status === 'loading') return <PageSkeleton variant="list" label="Loading your activity" />
   if (status === 'error' || !snapshot || !overview) return <LoadErrorState onRetry={() => void initialize()} />
 
 

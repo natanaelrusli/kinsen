@@ -14,6 +14,7 @@ import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { CalendarPage } from '../features/calendar/CalendarPage'
 import { CommitmentsPage } from '../features/commitments/CommitmentsPage'
 import { TransactionsPage } from '../features/transactions/TransactionsPage'
+import { ElectricityPage } from '../features/electricity/ElectricityPage'
 import { AppShellChrome } from '../shared/components/AppShell'
 import { useAssetStore } from '../shared/state/asset-store'
 import { useBudgetStore } from '../shared/state/budget-store'
@@ -26,8 +27,10 @@ const today = localToday()
 const search = new URLSearchParams(window.location.search)
 const sidebarPreviewE2E = search.get('sidebar-e2e') === '1'
 const workspaceE2E = search.get('workspace-e2e') === '1'
-const initialPath =
-  sidebarPreviewE2E || search.get('settings-e2e') === '1'
+const electricityTrackerE2E = search.get('electricity-tracker-e2e') === '1'
+const initialPath = electricityTrackerE2E
+  ? '/electricity'
+  : sidebarPreviewE2E || search.get('settings-e2e') === '1'
     ? '/settings'
     : search.get('budget-form-e2e') === '1'
       ? '/budget'
@@ -110,7 +113,7 @@ export function AssetTrackerHarness() {
   const playfulMotion = useSettingsStore((state) => state.playfulMotion)
   useEffect(() => {
     let active = true
-    if (sidebarPreviewE2E) {
+    if (sidebarPreviewE2E || electricityTrackerE2E) {
       setReady(true)
       return () => { active = false }
     }
@@ -122,6 +125,26 @@ export function AssetTrackerHarness() {
     return () => { active = false }
   }, [])
   if (error) return <main className="load-error-state" role="alert">{error}</main>
+  if (electricityTrackerE2E) {
+    return (
+      <MemoryRouter initialEntries={[initialPath]}>
+        <AppShellChrome
+          layoutDensity={layoutDensity}
+          playfulMotion={playfulMotion}
+          online
+          syncStatus="LOCAL"
+          error={null}
+          onRetry={() => window.location.reload()}
+          accountControl={<Stack><span className="sr-only">Test account</span></Stack>}>
+          <Stack className="page-content">
+            <Routes>
+              <Route path="/electricity" element={<ElectricityPage />} />
+            </Routes>
+          </Stack>
+        </AppShellChrome>
+      </MemoryRouter>
+    )
+  }
   if (!ready) return <main className="auth-loading" role="status">Preparing local asset test…</main>
   if (sidebarPreviewE2E) {
     return (

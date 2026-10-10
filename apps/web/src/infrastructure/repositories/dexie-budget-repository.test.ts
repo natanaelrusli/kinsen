@@ -2,10 +2,11 @@ import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { describe, expect, it, vi } from 'vitest'
 import { calculateFinancialPosition, createGoldValuation, deriveLedgerBalance } from '@kinsen/budget-domain'
-import type { AssetAccount, AssetEntry, AssetValuation, GoldPriceQuote, LiabilityAccount, LiabilityEntry, Transaction } from '@kinsen/budget-domain'
+import type { AssetAccount, AssetEntry, AssetValuation, GoldPriceQuote, LiabilityAccount, LiabilityEntry, TokenObservation, Transaction } from '@kinsen/budget-domain'
 import { DexieBudgetRepository } from './dexie-budget-repository'
 import { AssetUseCases } from '../../application/use-cases/asset-use-cases'
 import { localToday } from '../../shared/format/date'
+import { ElectricityUseCases } from '../../application/use-cases/electricity-use-cases'
 
 const activityDate = '2024-01-02'
 
@@ -303,6 +304,38 @@ describe('Dexie budget/asset transaction atomicity', () => {
     expect((await repository.getAssetData()).valuations).toEqual([opening])
     await repository.clearAccountData()
   })
+  it('persists ordered meter readings atomically, rejects unreconciled edits, and clears them on reset', async () => {
+    const repository = new DexieBudgetRepository()
+    const useCases = new ElectricityUseCases(repository)
+    const today = '2026-01-03'
+    const opening: TokenObservation = {
+      id: 'electricity-opening', date: '2026-01-01', sequence: 0, remainingMilliKwh: 68_000,
+      refillMilliKwh: null, refillCostIdr: null, refillSource: 'none',
+    }
+    const before: TokenObservation = {
+      id: 'electricity-before', date: '2026-01-02', sequence: 0, remainingMilliKwh: 19_000,
+      refillMilliKwh: null, refillCostIdr: null, refillSource: 'none',
+    }
+    const after: TokenObservation = {
+      id: 'electricity-after', date: '2026-01-02', sequence: 0, remainingMilliKwh: 351_860,
+      refillMilliKwh: 332_860, refillCostIdr: 500_000, refillSource: 'entered',
+    }
+    await useCases.saveObservation(opening, 0, today)
+    await useCases.saveObservation(before, 0, today)
+    await useCases.saveObservation(after, 1, today)
+    expect(await repository.getObservations()).toMatchObject([
+      { id: opening.id, sequence: 0 },
+      { id: before.id, sequence: 0 },
+      { id: after.id, sequence: 1 },
+    ])
+
+    await expect(useCases.saveObservation({ ...after, refillMilliKwh: 332_859 }, 1, today, after.id)).rejects.toThrow(/does not reconcile/i)
+    expect(await new DexieBudgetRepository().getObservations()).toEqual(await repository.getObservations())
+
+    await repository.clearAccountData()
+    expect(await repository.getObservations()).toEqual([])
+  })
+
 })
 
 function manualGold(id: string): AssetAccount {

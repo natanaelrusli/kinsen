@@ -1,7 +1,6 @@
 import { Button } from '@astryxdesign/core/Button'
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Stack } from '@astryxdesign/core/Stack'
 import { useEffect, useMemo, useState } from 'react'
@@ -12,6 +11,7 @@ import { formatDate, formatMonth, localToday } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { TransactionForm } from '../transactions/TransactionForm'
 import { useSettingsStore } from '../../shared/state/settings-store'
@@ -91,7 +91,7 @@ export function CalendarPage() {
     setSelectedDate(dateInMonth(nextMonth, parseDateOnly(selectedDate).day))
   }
 
-  if (status === 'loading') return <Spinner className="loading-state" label="Loading your calendar" size="md" />
+  if (status === 'loading') return <PageSkeleton variant="calendar" label="Loading your calendar" />
   if (status === 'error' || !snapshot || !overview) return <LoadErrorState onRetry={() => void initialize()} />
 
   const inBudgetMonth = Boolean(period && monthPrefix >= period.startDate.slice(0, 7) && monthPrefix <= period.endDate.slice(0, 7))

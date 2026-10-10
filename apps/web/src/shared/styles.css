@@ -45,6 +45,12 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .astryx-link > span { display: contents; color: inherit; font: inherit; }
 
 .auth-loading { display: grid; min-height: 100vh; place-items: center; padding: 24px; color: var(--muted); }
+.auth-splash { display: grid; justify-items: center; gap: var(--spacing-4); }
+.auth-splash-mark { width: 64px; height: 64px; border-radius: var(--radius-lg); font-size: 38px; animation: auth-splash-pulse 1.4s ease-in-out infinite; }
+.auth-splash-mark i { top: 8px; right: 8px; width: 12px; height: 12px; }
+.auth-splash-caption { margin: 0; color: var(--muted); font-size: 13px; letter-spacing: .01em; }
+@keyframes auth-splash-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .auth-splash-mark { animation: none; } }
 .auth-screen { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: var(--canvas); }
 .auth-card { width: min(100%, 460px); padding: clamp(28px, 6vw, 48px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow); }
 .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
@@ -163,12 +169,17 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .stat-card { display: flex; min-height: 144px; flex-direction: column; align-items: flex-start; padding: 17px 19px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .dashboard-assets-summary { margin: 15px 0 21px; }
 .dashboard-assets-summary .section-heading { margin-bottom: 13px; }
-.dashboard-assets-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 9px; }
-.dashboard-assets-metrics article { display: grid; min-width: 0; gap: 5px; padding: 11px 13px; border-radius: var(--radius-container); background: var(--surface-soft); }
-.dashboard-assets-metrics article > span { color: var(--muted); font-size: 10px; }
-.dashboard-assets-metrics article > strong { overflow: hidden; color: var(--ink-strong); font-size: clamp(14px, 1.3vw, 18px); font-weight: 650; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-assets-empty, .dashboard-assets-note { margin: 11px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
-.dashboard-assets-note { font-weight: 650; }
+/* One ruled strip rather than four nested cards: equal columns whatever the count,
+   fixed type scale so the figures never rescale with the viewport. */
+.dashboard-assets-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: var(--border-width) solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+.dashboard-assets-metrics article { display: flex; min-width: 0; flex-direction: column; gap: var(--spacing-1); padding: var(--spacing-3) var(--spacing-4); border-inline-start: var(--border-width) solid var(--line); }
+.dashboard-assets-metrics article > span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.dashboard-assets-metrics article > strong { overflow: hidden; color: var(--ink-strong); font-size: 19px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-assets-metrics article:first-child { border-inline-start: 0; background: var(--surface); }
+.dashboard-assets-metrics article:first-child > strong { font-size: 21px; }
+/* Net worth is a different measure, not a fifth component — it takes its own line. */
+.dashboard-assets-metrics .assets-metric-offset { grid-column: 1 / -1; border-inline-start: 0; border-block-start: var(--border-width) solid var(--line); padding-inline: var(--spacing-4); }
+.dashboard-assets-empty, .dashboard-assets-note { margin: var(--spacing-3) 0 0; color: var(--muted); font-size: var(--font-size-xs); line-height: 1.45; }
 .assets-page, .asset-detail-page { display: grid; gap: 16px; }
 .assets-page { container-name: assets-page; container-type: inline-size; }
 .assets-page > .page-heading { margin-bottom: var(--spacing-2); }
@@ -461,9 +472,9 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .form-section .section-title-row p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 .budget-form-grid > .astryx-field > :first-child { min-height: 40px; align-items: flex-start; }
 .form-section .field { min-width: 0; }
-.form-section .transaction-details-heading { justify-content: flex-start; margin-block: var(--spacing-4) var(--spacing-3); padding-block-start: var(--spacing-4); border-top: var(--border-width) solid var(--line); }
-.transaction-amount-control { min-height: calc(var(--spacing-12) + var(--spacing-2)); border-color: var(--green); background: var(--green-soft); }
-.transaction-amount-control input { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); }
+.form-section .dialog-form-lead-heading { justify-content: flex-start; margin-block: var(--spacing-4) var(--spacing-3); padding-block-start: var(--spacing-4); border-top: var(--border-width) solid var(--line); }
+.dialog-form-amount-control { min-height: calc(var(--spacing-12) + var(--spacing-2)); border-color: var(--green); background: var(--green-soft); }
+.dialog-form-amount-control input { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); }
 .allocation-equation { min-width: 0; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--surface-soft); }
 .allocation-equation-item { min-width: 0; gap: 3px; padding: 3px 6px; }
 .allocation-equation-item > span { color: var(--muted); font-size: 11px; }
@@ -598,6 +609,13 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .loading-state { display: flex; min-height: 310px; flex-direction: row; align-items: center; justify-content: center; gap: 11px; color: var(--muted); font-size: 13px; }
 .loading-state > :last-child { margin: 0; color: var(--muted); font-size: 13px; font-weight: 400; }
 .route-loading-state { min-height: var(--spacing-12); }
+
+.page-skeleton-region { min-height: 60vh; }
+.page-skeleton { width: 100%; }
+.skeleton-card { padding: var(--spacing-5); border: var(--border-width) solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.skeleton-row { min-height: 54px; padding: var(--spacing-3) var(--spacing-4); border: var(--border-width) solid var(--line); border-radius: var(--radius-element); background: var(--surface); }
+.skeleton-settings { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: var(--spacing-5); align-items: start; }
+@media (max-width: 1023px) { .skeleton-settings { grid-template-columns: minmax(0, 1fr); } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 
 @media (max-width: 1120px) {
@@ -605,6 +623,11 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .dashboard-content-grid { grid-template-columns: 1fr; }
   .commitments-preview .empty-state { min-height: 130px; }
   .calendar-day { min-height: calc(var(--spacing-12) + var(--spacing-10)); padding: var(--spacing-2); }
+  /* Four columns stop fitting their figures around here; fold to 2x2. */
+  .dashboard-assets-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-assets-metrics article:nth-child(2n+1) { border-inline-start: 0; }
+  .dashboard-assets-metrics article:nth-child(n+3) { border-block-start: var(--border-width) solid var(--line); }
+  .dashboard-assets-metrics .assets-metric-offset { padding-inline: var(--spacing-4); }
 }
 
 @media (max-width: 850px) {
@@ -745,18 +768,24 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .transaction-form .astryx-number-input,
   .transaction-form .astryx-selector,
   .transaction-form .astryx-date-input { min-height: var(--spacing-11); }
-  .transaction-form .transaction-amount-control { min-height: calc(var(--spacing-12) + var(--spacing-2)); }
+  .transaction-form .dialog-form-amount-control { min-height: calc(var(--spacing-12) + var(--spacing-2)); }
   .transaction-form .astryx-text-input input,
   .transaction-form .astryx-number-input input,
   .transaction-form .astryx-date-input input { min-height: var(--spacing-11); font-size: var(--font-size-lg); }
   .transaction-form .astryx-selector > button { min-height: var(--spacing-11); font-size: var(--font-size-lg); }
   .transaction-form .astryx-date-input > button,
   .transaction-form .astryx-input-clear-button { min-width: var(--spacing-11); min-height: var(--spacing-11); }
-  .transaction-form .transaction-amount-control input { min-height: var(--spacing-12); font-size: var(--font-size-2xl); }
+  .transaction-form .dialog-form-amount-control input { min-height: var(--spacing-12); font-size: var(--font-size-2xl); }
   .transaction-form .form-actions .button { min-height: var(--spacing-12); }
   .global-error { justify-content: flex-start; font-size: 11px; }
   .dashboard-assets-summary { margin: 11px 0; }
   .dashboard-assets-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-assets-metrics article { padding: var(--spacing-3); }
+  .dashboard-assets-metrics article:nth-child(2n+1) { border-inline-start: 0; }
+  .dashboard-assets-metrics article:nth-child(n+3) { border-block-start: var(--border-width) solid var(--line); }
+  .dashboard-assets-metrics .assets-metric-offset { padding-inline: var(--spacing-3); }
+  .dashboard-assets-metrics article > strong { font-size: 16px; }
+  .dashboard-assets-metrics article:first-child > strong { font-size: 18px; }
   .asset-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .asset-summary-grid .asset-total-card { grid-column: span 2; }
   .asset-breakdown-grid { grid-template-columns: 1fr; gap: 10px; }
@@ -788,6 +817,12 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 }
 
 @media (max-width: 380px) {
+  /* Two columns cannot hold a full rupiah figure at this width — one per row. */
+  .dashboard-assets-metrics { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-assets-metrics article { border-inline-start: 0; }
+  .dashboard-assets-metrics article + article { border-block-start: var(--border-width) solid var(--line); }
+  .dashboard-assets-metrics article > strong { font-size: 19px; }
+  .dashboard-assets-metrics article:first-child > strong { font-size: 21px; }
   .page-content { padding-right: max(var(--spacing-3), env(safe-area-inset-right)); padding-left: max(var(--spacing-3), env(safe-area-inset-left)); }
   .default-cadence-field { grid-column: auto; }
   .page-actions { gap: var(--spacing-2); }
@@ -816,4 +851,64 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+.electricity-page { min-width: 0; }
+.electricity-local-note { align-items: center; min-width: 0; padding: var(--spacing-3) var(--spacing-4); border: var(--border-width) solid var(--color-border-green); border-radius: var(--radius-container); background: var(--color-background-green); color: var(--color-text-green); }
+.electricity-local-note .astryx-text { min-width: 0; }
+.electricity-metric-card { min-width: 0; height: 100%; }
+.electricity-metric-card .electricity-metric-value { margin: 0; color: var(--color-text-strong); font-size: var(--font-size-2xl); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.electricity-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.electricity-section-heading { flex-wrap: wrap; }
+.electricity-month-selector { width: min(100%, calc(var(--spacing-12) * 8)); }
+.electricity-month-card { display: flex; flex-direction: column; gap: var(--spacing-3); min-width: 0; }
+.electricity-month-note { margin: 0; }
+.electricity-chart-section, .electricity-history-section { min-width: 0; }
+.electricity-chart-frame { min-width: 0; }
+.electricity-chart-frame .recharts-surface { overflow: visible; }
+.electricity-chart-frame .recharts-cartesian-grid line { stroke: var(--color-border); }
+.electricity-chart-frame .recharts-cartesian-axis-line { stroke: var(--color-border); }
+.electricity-chart-line { stroke: var(--color-text-accent); stroke-width: 2.5; }
+.electricity-chart-gridline { stroke: var(--color-border); stroke-width: 1; }
+.electricity-chart-axis-label { fill: var(--color-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.electricity-chart-axis-title { fill: var(--color-text-disabled); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.electricity-chart-point { fill: var(--color-text-accent); }
+.electricity-chart-refill { fill: var(--color-text-yellow); stroke: var(--color-background-surface); stroke-width: 2; }
+.electricity-chart-empty { padding: var(--spacing-8) var(--spacing-4); border: var(--border-width) dashed var(--color-border); border-radius: var(--radius-container); background: var(--color-background-muted); text-align: center; }
+.electricity-legend-line { display: inline-block; width: var(--spacing-4); height: 0; margin-inline-end: var(--spacing-2); border-block-start: var(--border-width) solid var(--color-text-accent); vertical-align: middle; }
+.electricity-legend-refill { display: inline-block; width: var(--spacing-2); height: var(--spacing-2); margin-inline-end: var(--spacing-2); border-radius: var(--radius-full); background: var(--color-text-yellow); vertical-align: middle; }
+.electricity-quality { padding-block-start: var(--spacing-3); border-block-start: var(--border-width) solid var(--color-border); }
+.electricity-quality-item { flex-wrap: wrap; align-items: flex-start; padding: var(--spacing-3); border-inline-start: var(--border-width) solid var(--color-border-yellow); border-radius: var(--radius-sm); background: var(--color-background-yellow); color: var(--color-text-primary); }
+/* The row is flex-start aligned so the dot tracks the first line of a wrapped message.
+   Nudge the 8px dot onto that line's optical centre instead of the block's top edge. */
+.electricity-quality-item > .astryx-status-dot { margin-block-start: var(--spacing-1-5); }
+/* Flex wrap sizes items by their max-content basis, which pushed long messages onto
+   their own line and stranded the dot. A zero basis lets the text shrink and wrap
+   internally beside the dot instead. */
+.electricity-quality-item > .astryx-text { flex: 1 1 0%; min-width: 0; }
+.electricity-quality-item.is-error { border-color: var(--color-border-red); background: var(--color-background-danger-subtle); color: var(--color-text-red); }
+/* The link is always given its own full-width row so the message keeps the width. */
+.electricity-quality-item a { flex: 1 0 100%; color: var(--color-text-accent); font-weight: var(--font-weight-semibold); text-decoration: underline; text-underline-offset: var(--spacing-0-5); }
+.electricity-history-date { min-width: 0; }
+.electricity-row-actions button { min-width: var(--spacing-10); min-height: var(--spacing-10); }
+.electricity-form { gap: var(--spacing-4); }
+.electricity-refill-hint { padding: var(--spacing-3); border-inline-start: var(--border-width) solid var(--color-border-yellow); border-radius: var(--radius-sm); background: var(--color-background-yellow); color: var(--color-text-primary); }
+
+@media (min-width: 64rem) {
+  .electricity-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 48rem) {
+  .electricity-form .astryx-number-input,
+  .electricity-form .astryx-date-input,
+  .electricity-form .astryx-selector { min-height: var(--spacing-11); }
+  .electricity-form .dialog-form-amount-control { min-height: calc(var(--spacing-12) + var(--spacing-2)); }
+  .electricity-form .astryx-number-input input,
+  .electricity-form .astryx-date-input input { min-height: var(--spacing-11); font-size: var(--font-size-lg); }
+  .electricity-form .astryx-selector > button { min-height: var(--spacing-11); font-size: var(--font-size-lg); }
+  .electricity-form .form-actions .button { min-height: var(--spacing-12); }
+}
+
+@media (max-width: 36rem) {
+  .electricity-metric-grid { grid-template-columns: minmax(0, 1fr); }
+  .electricity-local-note { align-items: flex-start; }
 }

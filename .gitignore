@@ -23,6 +23,7 @@ apps/web/test-results/
 apps/*/.env*
 !apps/*/.env.example
 .archify/
+.serena/
 .impeccable/config.local.json
 .impeccable/review/
 .claude/settings.local.json

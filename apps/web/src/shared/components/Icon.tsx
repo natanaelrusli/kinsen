@@ -7,7 +7,7 @@ import {
   Clock, Columns3, Contrast, Copy, Ellipsis, ExternalLink,
   EyeOff, FileText, Funnel, House, Info, Landmark, Menu, Mic, Pencil,
   Plus, ReceiptText, Search, Settings, Square, Trash2, TriangleAlert,
-  Wallet, Wrench, X, type LucideIcon,
+  Wallet, Wrench, X, Zap, type LucideIcon,
 } from 'lucide-react'
 
 const glyphs = {
@@ -16,6 +16,7 @@ const glyphs = {
   commitments: FileText,
   activity: ChartNoAxesColumnIncreasing,
   assets: Landmark,
+  electricity: Zap,
   wallet: Wallet,
   settings: Settings,
   plus: Plus,

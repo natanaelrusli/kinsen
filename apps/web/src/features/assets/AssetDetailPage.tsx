@@ -1,6 +1,5 @@
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@astryxdesign/core/Link'
 import { useParams } from 'react-router-dom'
@@ -13,6 +12,7 @@ import { formatDate, localToday } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { AssetLineChart } from './AssetLineChart'
 import { AssetActivityForm, AssetForm, AssetValuationForm, TransferForm } from './AssetForms'
@@ -166,7 +166,7 @@ export function AssetDetailPage() {
     catch (reason) { setPageError(reason instanceof Error ? reason.message : 'Asset could not be archived.') }
   }
 
-  if (status === 'idle' || status === 'loading') return <Spinner className="loading-state" label="Loading asset details" size="md" />
+  if (status === 'idle' || status === 'loading') return <PageSkeleton variant="detail" label="Loading asset details" />
   if (!asset) return <div className="asset-load-error"><h2>Asset not found</h2><p>This asset may have been removed from this device.</p><Link className="button button-secondary" color="inherit" href="/assets">Return to Assets</Link></div>
 
   const valueDate = currentValuation?.asOfDate ?? lastEntry?.date ?? asset.createdAt

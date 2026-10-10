@@ -1,10 +1,10 @@
 import { Button } from '@astryxdesign/core/Button'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { Component, lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { AppShell } from './shared/components/AppShell'
+import { RouteSkeleton } from './shared/components/RouteSkeleton'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
 const CalendarPage = lazy(() => import('./features/calendar/CalendarPage').then(({ CalendarPage }) => ({ default: CalendarPage })))
@@ -15,6 +15,7 @@ const AssetsPage = lazy(() => import('./features/assets/AssetsPage').then(({ Ass
 const AssetDetailPage = lazy(() => import('./features/assets/AssetDetailPage').then(({ AssetDetailPage }) => ({ default: AssetDetailPage })))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then(({ SettingsPage }) => ({ default: SettingsPage })))
 const AccountSettingsPage = lazy(() => import('./features/account/AccountSettingsPage').then(({ AccountSettingsPage }) => ({ default: AccountSettingsPage })))
+const ElectricityPage = lazy(() => import('./features/electricity/ElectricityPage').then(({ ElectricityPage }) => ({ default: ElectricityPage })))
 
 const budgetOwnerKey = 'kinsen-budget-clerk-owner'
 
@@ -41,6 +42,17 @@ function SignInScreen() {
         </div>
         <p className="auth-note">Your budget is linked to one Clerk account on this API.</p>
       </section>
+    </main>
+  )
+}
+
+function AppSplash() {
+  return (
+    <main className="auth-loading" role="status">
+      <div className="auth-splash">
+        <span className="brand-mark auth-splash-mark" aria-hidden="true"><span>K</span><i /></span>
+        <p className="auth-splash-caption">Loading your budget…</p>
+      </div>
     </main>
   )
 }
@@ -85,7 +97,7 @@ function AccountGate() {
     }
   }, [isLoaded, userId])
 
-  if (!isLoaded || access === 'checking') return <main className="auth-loading" role="status">Checking your account…</main>
+  if (!isLoaded || access === 'checking') return <AppSplash />
   if (access === 'different-account') {
     return <AccountNotice title="This browser belongs to another account." message="Sign out and use the Clerk account linked to this browser's local budget. Your saved data has not been changed." />
   }
@@ -116,7 +128,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 
 function RouteContent() {
   const location = useLocation()
-  return <RouteErrorBoundary key={location.key}><Suspense fallback={<Spinner className="loading-state route-loading-state" label="Loading page" size="md" />}><Outlet /></Suspense></RouteErrorBoundary>
+  return <RouteErrorBoundary key={location.key}><Suspense fallback={<RouteSkeleton />}><Outlet /></Suspense></RouteErrorBoundary>
 }
 
 
@@ -133,6 +145,7 @@ function BudgetApplication() {
             <Route path="budget" element={<BudgetPage />} />
             <Route path="assets" element={<AssetsPage />} />
             <Route path="assets/:assetId" element={<AssetDetailPage />} />
+            <Route path="electricity" element={<ElectricityPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="account" element={<AccountSettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -146,7 +159,7 @@ function BudgetApplication() {
 export function App() {
   return (
     <>
-      <ClerkLoading><main className="auth-loading" role="status">Loading secure sign-in…</main></ClerkLoading>
+      <ClerkLoading><AppSplash /></ClerkLoading>
       <ClerkLoaded>
         <Show when="signed-out"><SignInScreen /></Show>
         <Show when="signed-in"><AccountGate /></Show>

@@ -32,8 +32,10 @@ describe('AccountSettingsPage', () => {
 
     const resetButton = screen.getByRole('button', { name: 'Reset all data' })
     expect(resetButton).toBeEnabled()
+    expect(screen.getByText(/assets, liabilities and PLN Token Tracker readings are stored only on this device/)).toBeInTheDocument()
 
     fireEvent.click(resetButton)
     expect(screen.getByRole('dialog', { name: 'Reset all account data?' })).toBeInTheDocument()
+    expect(screen.getByText(/assets, liabilities, and PLN Token Tracker readings saved on this device/)).toBeInTheDocument()
   })
 })

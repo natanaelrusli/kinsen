@@ -2,7 +2,6 @@ import { Button } from '@astryxdesign/core/Button'
 import { Card } from '@astryxdesign/core/Card'
 import { ProgressBar } from '@astryxdesign/core/ProgressBar'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
-import { Spinner } from '@astryxdesign/core/Spinner'
 import { Stack } from '@astryxdesign/core/Stack'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Link } from '@astryxdesign/core/Link'
@@ -12,6 +11,7 @@ import { formatDate, formatLongDate } from '../../shared/format/date'
 import { formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
+import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
 import { TransactionForm } from '../transactions/TransactionForm'
 import { TransactionRow } from '../transactions/TransactionRow'
@@ -52,7 +52,7 @@ export function DashboardPage() {
   const [confirmingTransaction, setConfirmingTransaction] = useState<Transaction | null>(null)
   const { error, message: deleteMessage, undoTransaction, deleting, deleteTransaction, undoDelete } = useUndoableTransactionDelete(runMutation)
   const recentTransactions = useMemo(() => (snapshot?.transactions ?? []).slice().sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id)).slice(0, 4), [snapshot?.transactions])
-  if (status === 'loading') return <Spinner className="loading-state" label="Loading your budget" size="md" />
+  if (status === 'loading') return <PageSkeleton variant="overview" label="Loading your budget" />
   if (status === 'error' || !snapshot || !overview) return <LoadErrorState onRetry={() => void initialize()} />
 
   const period = snapshot.period
@@ -90,16 +90,15 @@ export function DashboardPage() {
         <article className="stat-card"><span className="stat-label">Protected reserve</span><strong>{formatIdr(overview.protectedReserve)}</strong><span className="stat-detail">Kept out of today’s spending number</span><span className="reserve-status"><Icon name="check" size={14} />Protected</span></article>
       </section>}
       {dashboardSections.assets && assetStatus === 'ready' && <section className="section-block dashboard-assets-summary" aria-labelledby="dashboard-assets-title">
-        <div className="section-heading"><div><p className="eyebrow">FINANCIAL POSITION</p><h2 id="dashboard-assets-title">Your assets</h2></div><Link className="text-link" color="inherit" href="/assets">View assets <Icon name="arrow" size={15} /></Link></div>
+        <div className="section-heading"><div><p className="eyebrow">FINANCIAL POSITION</p><h2 id="dashboard-assets-title">Your assets</h2><p className="dashboard-assets-note">Separate from Safe to Spend Today.</p></div><Link className="text-link" color="inherit" href="/assets">View assets <Icon name="arrow" size={15} /></Link></div>
         <div className="dashboard-assets-metrics">
           <article><span>Total assets</span><strong>{formatIdr(assetPosition.totalAssets)}</strong></article>
           <article><span>Daily-use cash</span><strong>{formatIdr(assetPosition.dailyUseCash)}</strong></article>
           <article><span>Protected savings</span><strong>{formatIdr(assetPosition.protectedSavings)}</strong></article>
           <article><span>Investments</span><strong>{formatIdr(assetPosition.investmentValue)}</strong></article>
-          {hasActiveLiabilities && assetPosition.netWorth !== null && <article><span>Net worth</span><strong>{formatIdr(assetPosition.netWorth)}</strong></article>}
+          {hasActiveLiabilities && assetPosition.netWorth !== null && <article className="assets-metric-offset"><span>Net worth</span><strong>{formatIdr(assetPosition.netWorth)}</strong></article>}
         </div>
         {assetPosition.netWorth === null && assetPosition.totalAssets === 0 && <p className="dashboard-assets-empty">Add assets or liabilities for a financial-position summary. These figures never change Safe to Spend Today.</p>}
-        <p className="dashboard-assets-note">Separate from Safe to Spend Today.</p>
         {goldHoldings.map(asset => <GoldValueStatus key={asset.id} today={overview.today} online={online} error={goldErrors[asset.id]} valuation={assetData.valuations.filter(item => item.assetId === asset.id && item.asOfDate <= overview.today).sort(valuationOrder).at(-1)} />)}
       </section>}
 

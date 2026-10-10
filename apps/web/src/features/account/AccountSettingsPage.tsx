@@ -90,7 +90,7 @@ export function AccountSettingsPage() {
           <div>
             <p className="eyebrow">YOUR DATA</p>
             <h2 id="reset-account-title">Reset all account data</h2>
-            <p>Delete your budget, assets, liabilities, categories, commitments, transactions and queued changes. Budget data is cleared from the Kinsen API; assets and liabilities are stored only on this device and are cleared here. Other devices clear their local budget copies the next time they connect. This reset requires an internet connection. Your Clerk sign-in stays active.</p>
+            <p>Delete your budget, assets, liabilities, PLN Token Tracker readings, categories, commitments, transactions and queued changes. Budget data is cleared from the Kinsen API; assets, liabilities and PLN Token Tracker readings are stored only on this device and are cleared here. Other devices clear their local budget copies the next time they connect. This reset requires an internet connection. Your Clerk sign-in stays active.</p>
             {resetHint && (
               <p id="reset-account-hint" className="account-setting-hint" role={syncStatus === 'ACCOUNT_MISMATCH' ? 'alert' : 'status'}>
                 {resetHint}
@@ -115,14 +115,14 @@ export function AccountSettingsPage() {
         open={action !== null}
         title={isReset ? 'Reset all account data?' : 'Deactivate this account?'}
         description={isReset
-          ? 'This permanently removes Kinsen budget data and the assets and liabilities saved on this device.'
+          ? 'This permanently removes Kinsen budget data and the assets, liabilities, and PLN Token Tracker readings saved on this device.'
           : 'You will be signed out and blocked from signing in until an administrator reactivates your Clerk account.'}
         onClose={closeAction}
       >
         <form className="form-stack" onSubmit={(event) => void submitAction(event)}>
           <p className="account-confirmation-copy">
             {isReset
-              ? 'This affects the API budget and this browser’s local asset data. Other devices remove their local budget copies when they next connect. Your sign-in remains active.'
+              ? 'This affects the API budget and this browser’s local asset, liability, and PLN Token Tracker data. Other devices remove their local budget copies when they next connect. Your sign-in remains active.'
               : 'Your Kinsen data is retained. Reset all account data first if you also want to erase it.'}
           </p>
           <TextInput label={`Type ${phrase} to confirm`} value={confirmation} onChange={setConfirmation} autoComplete="off" />

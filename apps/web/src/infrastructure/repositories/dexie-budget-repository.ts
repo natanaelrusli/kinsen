@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
-import { validateSnapshot } from '@kinsen/budget-domain'
-import type { AssetAccount, AssetData, AssetEntry, AssetValuation, BudgetPeriod, BudgetSnapshot, Category, DateOnly, LiabilityAccount, LiabilityEntry, PlannedExpense, Transaction } from '@kinsen/budget-domain'
+import { sortElectricityHistory, validateElectricityHistory, validateSnapshot } from '@kinsen/budget-domain'
+import type { AssetAccount, AssetData, AssetEntry, AssetValuation, BudgetPeriod, BudgetSnapshot, Category, DateOnly, LiabilityAccount, LiabilityEntry, PlannedExpense, TokenObservation, Transaction } from '@kinsen/budget-domain'
 import type { BudgetRepository } from './budget-repository'
 import type { PendingBudgetOperation } from './pending-budget-operation'
 import { validateAssetData } from '@kinsen/budget-domain'
@@ -8,6 +8,7 @@ import type { AssetRepository } from './asset-repository'
 import type { AssetOpeningRecord } from './asset-repository'
 import { goldHoldingChanged, matchesCurrentGoldHolding } from './asset-repository'
 import { localToday } from '../../shared/format/date'
+import type { ElectricityRepository } from './electricity-repository'
 
 class BudgetDatabase extends Dexie {
   periods!: Table<BudgetPeriod, string>
@@ -21,6 +22,7 @@ class BudgetDatabase extends Dexie {
   assetValuations!: Table<AssetValuation, string>
   liabilityAccounts!: Table<LiabilityAccount, string>
   liabilityEntries!: Table<LiabilityEntry, string>
+  electricityObservations!: Table<TokenObservation, string>
 
 
   constructor() {
@@ -59,16 +61,76 @@ class BudgetDatabase extends Dexie {
       liabilityAccounts: 'id, type, institution, archivedAt',
       liabilityEntries: 'id, liabilityId, date, kind, assetEntryId',
     })
+    this.version(5).stores({
+      periods: 'id',
+      categories: 'id',
+      plannedExpenses: 'id, categoryId',
+      transactions: 'id, categoryId, plannedExpenseId',
+      pendingOperations: '++queueId, createdAt',
+      accountMetadata: 'key',
+      assetAccounts: 'id, type, institution, purpose, archivedAt',
+      assetEntries: 'id, assetId, date, kind, transferId, budgetTransactionId, liabilityEntryId',
+      assetValuations: 'id, assetId, asOfDate, recordedAt',
+      liabilityAccounts: 'id, type, institution, archivedAt',
+      liabilityEntries: 'id, liabilityId, date, kind, assetEntryId',
+      electricityObservations: 'id, &[date+sequence]',
+    })
 
   }
 }
 
-export class DexieBudgetRepository implements BudgetRepository, AssetRepository {
+export class DexieBudgetRepository implements BudgetRepository, AssetRepository, ElectricityRepository {
   private readonly accountDataClearedListeners = new Set<() => void>()
+  private mutationEpoch = 0
 
   onAccountDataCleared(listener: () => void): () => void {
     this.accountDataClearedListeners.add(listener)
     return () => { this.accountDataClearedListeners.delete(listener) }
+  }
+  getMutationEpoch(): number {
+    return this.mutationEpoch
+  }
+
+  async getObservations(): Promise<TokenObservation[]> {
+    return sortElectricityHistory(await this.db.electricityObservations.toArray())
+  }
+
+  async saveObservation(observation: TokenObservation, position: number, today: DateOnly, replacingId?: string, expectedEpoch = this.mutationEpoch): Promise<void> {
+    if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be saved.')
+    await this.db.transaction('rw', this.db.electricityObservations, async () => {
+      if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be saved.')
+      const current = sortElectricityHistory(await this.db.electricityObservations.toArray())
+      if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be saved.')
+      if (replacingId && !current.some((item) => item.id === replacingId)) {
+        throw new Error('This reading no longer exists. Reload the history before editing.')
+      }
+      const remaining = current.filter((item) => item.id !== replacingId)
+      const sameDay = remaining.filter((item) => item.date === observation.date)
+      if (!Number.isSafeInteger(position) || position < 0 || position > sameDay.length) {
+        throw new Error('Choose a valid order among readings on this date.')
+      }
+      sameDay.splice(position, 0, { ...observation, sequence: 0 })
+      const resequenced = sameDay.map((item, sequence) => ({ ...item, sequence }))
+      const next = sortElectricityHistory([...remaining.filter((item) => item.date !== observation.date), ...resequenced])
+      const validation = validateElectricityHistory(next, today)
+      if (validation.errors.length) throw new Error(validation.errors.map((item) => item.message).join(' '))
+      await this.db.electricityObservations.clear()
+      await this.db.electricityObservations.bulkPut(next)
+    })
+  }
+
+  async deleteObservation(id: string, today: DateOnly, expectedEpoch = this.mutationEpoch): Promise<void> {
+    if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be deleted.')
+    await this.db.transaction('rw', this.db.electricityObservations, async () => {
+      if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be deleted.')
+      const current = sortElectricityHistory(await this.db.electricityObservations.toArray())
+      if (expectedEpoch !== this.mutationEpoch) throw new Error('Account data was reset before this reading could be deleted.')
+      const next = current.filter((item) => item.id !== id)
+      if (next.length === current.length) return
+      const validation = validateElectricityHistory(next, today)
+      if (validation.errors.length) throw new Error(validation.errors.map((item) => item.message).join(' '))
+      await this.db.electricityObservations.delete(id)
+    })
   }
 
   constructor(private readonly db = new BudgetDatabase()) {}
@@ -92,6 +154,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
   }
 
   async clearAccountData(): Promise<void> {
+    this.mutationEpoch += 1
     await this.db.transaction(
       'rw',
       [
@@ -105,6 +168,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
         this.db.assetValuations,
         this.db.liabilityAccounts,
         this.db.liabilityEntries,
+        this.db.electricityObservations,
       ],
       async () => {
         await Promise.all([
@@ -118,6 +182,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
           this.db.assetValuations.clear(),
           this.db.liabilityAccounts.clear(),
           this.db.liabilityEntries.clear(),
+          this.db.electricityObservations.clear(),
         ])
       },
     )
@@ -469,3 +534,4 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository 
 
 export const budgetRepository = new DexieBudgetRepository()
 export const assetRepository: AssetRepository = budgetRepository
+export const electricityRepository: ElectricityRepository = budgetRepository
