@@ -1,12 +1,14 @@
 # Kinsen
 
-Kinsen is an offline-first daily budget planner. The workspace contains a React web app, an Express API, and a shared TypeScript budget domain.
+Kinsen is an offline-first daily budget planner. The workspace contains a React web app, an Express API, a shared TypeScript budget domain, and a browser-paired MCP server for AI agents.
 
 ## Workspace
 
 - `apps/web` — React, Vite, Dexie/IndexedDB, and the PWA frontend.
 - `apps/api` — Express 5 TypeScript API and SQLite persistence using Node's built-in `node:sqlite`.
+- `apps/mcp` — stdio Model Context Protocol server with a token-paired, loopback-only WebSocket bridge to the open app.
 - `packages/budget-domain` — shared budget types, validation, date-only helpers, and calculations.
+- `packages/mcp-contract` — shared MCP tool schemas and browser bridge protocol.
 
 ## Requirements and commands
 
@@ -36,6 +38,54 @@ pnpm db:migrate # apply SQLite migrations without starting the API
 ```
 
 `pnpm start` starts only the API. For a local production preview, build first, then run `pnpm start` and `pnpm --filter @kinsen/web preview` in separate terminals; the preview listens on `127.0.0.1:4173`. Set `WEB_HOST=0.0.0.0` on the preview command to make that preview reachable on a trusted network too. A deployed frontend must route same-origin `/api` requests to the API; use an HTTPS reverse proxy for public deployment, not Vite's development or preview server.
+
+## MCP: manage app data with an AI agent
+
+The MCP server exposes 23 tools for budget periods/categories, transactions, commitments, assets, valuations, transfers, liabilities/payments, gold prices, and PLN electricity readings. It uses the **open, signed-in browser** as the data gateway, so browser-only records remain on that device. Existing app validation, atomic financial operations, UI store refreshes, and the budget synchronization outbox still apply. The server never opens SQLite directly or receives your Clerk credentials. Appearance, bank-email configuration, account reset, and account deactivation are not exposed as MCP tools.
+
+### Setup
+
+1. Run `pnpm install` and `pnpm build`.
+2. Run `pnpm dev`, open **http://127.0.0.1:5173**, and sign in.
+3. Generate a separate bridge secret:
+
+   ```sh
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+4. Add the following to your MCP client's server configuration. Replace the absolute repository path and `PASTE_THE_SECRET_GENERATED_ABOVE`; the client launches the server itself:
+
+   ```json
+   {
+     "mcpServers": {
+       "kinsen": {
+         "command": "node",
+         "args": ["/absolute/path/to/kinsen/apps/mcp/dist/index.js"],
+         "env": {
+           "KINSEN_BRIDGE_TOKEN": "PASTE_THE_SECRET_GENERATED_ABOVE",
+           "KINSEN_BRIDGE_PORT": "3003",
+           "KINSEN_APP_ORIGIN": "http://127.0.0.1:5173"
+         }
+       }
+     }
+   }
+   ```
+
+5. In Kinsen, open **Settings → Account settings → AI agent connection**. Enter the same bridge secret and port, then choose **Connect AI agent**. Keep the app open while the agent works. Pairing persists as you navigate within the app, but not after reload.
+
+Use an absolute Node executable path in `command` if your MCP client does not inherit your shell's PATH. For a terminal launch, set the same environment variables and use `pnpm --silent mcp`; stdout is reserved for the MCP protocol, and startup diagnostics go to stderr. Do not launch a second instance on the same port.
+
+### Access and operation rules
+
+- Pair only an agent you trust: the connection grants read/write access to financial records, including deletion. It does not require an in-app prompt for each mutation; use your MCP client's tool-approval controls.
+- The secret is required, at least 32 characters, and is not saved by Kinsen's browser UI. Keep the client configuration private; never commit the secret or use a Clerk token. Rotate it by changing the client configuration, restarting its server, and pairing again.
+- The bridge listens only on `127.0.0.1`. Browser and MCP server must run on the same machine. Use the local HTTP development app; an HTTPS deployment can block the insecure `ws://` connection. This is not a public remote MCP endpoint.
+- `KINSEN_APP_ORIGIN` is one exact HTTP(S) origin with no trailing slash/path. `localhost` and `127.0.0.1` are different origins. For preview use `http://127.0.0.1:4173`; for another local port change the configured origin accordingly. Origin and Host are checked before pairing; only one browser can pair with a server.
+- **Disconnect AI agent**, sign-out, closing/reloading the app, or clearing account data revokes the session. Queued commands cannot start after revocation. An operation already in progress may finish; disconnect does not roll it back.
+- Unpaired calls fail rather than waiting. Calls have a 30-second deadline, and bridge messages have a 1 MiB limit. A timeout/disconnect can leave a mutation's outcome unknown: read the current data before proceeding, and **do not retry blindly**. There is no automatic reconnection or replay.
+- Start with `kinsen_get_data` (`scope`: `all`, `budget`, `assets`, or `electricity`). Read current IDs before edits. For new records generate unique stable IDs; update tools retain those IDs. `kinsen_save_budget` takes the full category list, not a partial patch. Budget mutations report `savedLocally` and `syncStatus`; local success does not claim that the API has already synced. Assets, liabilities, and readings remain device-local.
+- Amounts are whole IDR for budgets and IDR ledgers; valuations use native currency minor units with an explicit conversion rate. Electricity balances/credits use **milli-kWh** (`1000 = 1 kWh`). Dates are calendar dates in `YYYY-MM-DD`.
+- Deletion/archive tools require `confirm: true` after user authorization. Transfers and liability payments create both linked entries atomically and do not create budget expenses. Linked/opening records cannot be overwritten as standalone activity. Manual valuations append immutable history; automatic gold prices come from real provider responses, not supplied provenance.
 
 ## Configuration
 
@@ -111,6 +161,8 @@ Gold prices use the provider's IDR retail `sellPrice` from [logam-mulia-api](htt
 
 Automatic pricing requires IDR; Kinsen does not migrate existing foreign-currency gold holdings or fetch FX rates. Edit details to change package units/product or disable automation; prior valuations remain in history, and unchanged metadata edits/disable work offline. Clearing account data cancels pending price requests. Asset totals and net worth never increase Safe to Spend.
 
+Asset history charts also provide an expandable table of all plotted dates and values.
+
 The assets UI lives in `apps/web/src/features/assets/`. `AssetsPage.tsx` coordinates initialization, gold refresh, and asset/valuation/transfer dialogs. `AssetHistorySection` owns date-range controls and history calculations; `AssetHoldingsSection` owns grouped holdings and asset rows; `AssetLiabilitiesSection` owns liability actions, forms, confirmations, and paginated history. `AssetPositionSummary`, `AssetBreakdowns`, and `ArchivedAccountsSection` render the remaining sections. Keep section-specific state and derived data with the section that uses them; shared financial rules remain in `@kinsen/budget-domain`.
 
 ## PLN Token Tracker
@@ -118,6 +170,8 @@ The assets UI lives in `apps/web/src/features/assets/`. `AssetsPage.tsx` coordin
 Open `/electricity` from the desktop sidebar, mobile **More**, or command search. Record manual readings for one prepaid meter; each reading's balance is the post-refill balance when a top-up is attached. The tracker is not a live meter feed and does not look up PLN tariffs.
 
 Usage follows balance conservation: opening balance plus credited top-ups after the opening reading, minus the latest balance. Unknown refill credit blocks affected usage and depletion estimates. An explicitly inferred refill remains provisional because a balance increase cannot reveal electricity consumed between readings. Monthly values cover the selected month’s observed dates; partial periods are not presented as full-calendar-month consumption.
+
+The balance-change metric is a net balance delta that includes recorded refill credit; it is not an electricity-usage measure.
 
 The depletion estimate starts from the last measured balance and reading date, applies the lifetime average daily usage, assumes unchanged use and no future top-ups, and rounds down to an approximate calendar day. The reading age is shown separately; a past estimate asks for a new reading and does not assert that the meter is empty. **Recorded refill spending** is cash outflow, not a tariff or consumed-energy cost, and never creates a budget expense.
 

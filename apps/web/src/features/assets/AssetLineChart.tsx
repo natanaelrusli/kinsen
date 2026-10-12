@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { Text } from '@astryxdesign/core/Text'
 import type { DateOnly } from '@kinsen/budget-domain'
 import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { formatDate } from '../../shared/format/date'
@@ -12,7 +13,7 @@ function localCalendarDay(date: DateOnly): number {
 export function AssetLineChart({ points, description = 'Asset value history' }: { points: Array<{ date: DateOnly; value: number }>; description?: string }) {
   const titleId = useId()
   const descriptionId = useId()
-  if (!points.length) return <div className="asset-chart-empty">Add an opening balance or valuation to build a history chart.</div>
+  if (!points.length) return <Text className="asset-chart-empty">Add an opening balance or valuation to build a history chart.</Text>
   const width = 640
   const height = 180
   const insetX = 14
@@ -43,6 +44,23 @@ export function AssetLineChart({ points, description = 'Asset value history' }: 
     <p id={descriptionId} className="sr-only" aria-live="polite" aria-atomic="true">
       {`${description} ranges from ${formatIdr(min)} to ${formatIdr(max)}. It starts at ${formatIdr(points[0]!.value)} on ${formatDate(points[0]!.date, { day: 'numeric', month: 'long', year: 'numeric' })} and ends at ${formatIdr(points[points.length - 1]!.value)} on ${formatDate(points[points.length - 1]!.date, { day: 'numeric', month: 'long', year: 'numeric' })}.`}
     </p>
+    <details className="asset-chart-data">
+      <summary>View all {points.length} dated values</summary>
+      <table>
+        <caption className="sr-only">{description} dated values</caption>
+        <thead>
+          <tr><th scope="col">Date</th><th scope="col">Value</th></tr>
+        </thead>
+        <tbody>
+          {points.map((point, index) => (
+            <tr key={`${point.date}-${index}`}>
+              <th scope="row">{formatDate(point.date, { day: 'numeric', month: 'long', year: 'numeric' })}</th>
+              <td>{formatIdr(point.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
     <figcaption><span>{formatDate(points[0]!.date, { day: 'numeric', month: 'short', year: 'numeric' })}</span><span>{formatDate(points[points.length - 1]!.date, { day: 'numeric', month: 'short', year: 'numeric' })}</span></figcaption>
   </figure>
 }

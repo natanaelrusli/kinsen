@@ -167,7 +167,7 @@ export function AssetDetailPage() {
   }
 
   if (status === 'idle' || status === 'loading') return <PageSkeleton variant="detail" label="Loading asset details" />
-  if (!asset) return <div className="asset-load-error"><h2>Asset not found</h2><p>This asset may have been removed from this device.</p><Link className="button button-secondary" color="inherit" href="/assets">Return to Assets</Link></div>
+  if (!asset) return <Stack className="asset-load-error" role="alert"><h2>Asset not found</h2><p>This asset may have been removed from this device.</p><Link className="button button-secondary" color="inherit" href="/assets">Return to Assets</Link></Stack>
 
   const valueDate = currentValuation?.asOfDate ?? lastEntry?.date ?? asset.createdAt
   const showNative = currentValuation !== null && !currentValuation.goldQuote
@@ -179,7 +179,7 @@ export function AssetDetailPage() {
     <Link className="asset-back-link" color="inherit" href="/assets"><Icon name="arrow-left" size={17} />All assets</Link>
     {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
     {pageError && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{pageError}</p>}
-    {archived && <div className="archived-banner" role="status">Archived {formatDate(asset.archivedAt!, { day: 'numeric', month: 'long', year: 'numeric' })} · shown for historical review only.</div>}
+    {archived && <Stack as="div" className="archived-banner" role="status" style={{ display: 'block' }}>Archived {formatDate(asset.archivedAt!, { day: 'numeric', month: 'long', year: 'numeric' })} · shown for historical review only.</Stack>}
     <PageHeader eyebrow={`${assetTypeLabels[asset.type]} · ${asset.institution}`} title={asset.name} description={asset.notes ?? 'Saved asset valuations stay separate from Safe to Spend Today.'} actions={!archived ? <>
       <Button label="Edit details" icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => setAssetDialog(true)} />
       {asset.balanceMode === 'VALUATION' ? <Button label={asset.goldPricing ? 'Refresh price' : 'Update value'} icon={<Icon name="edit" size={17} />} className="button button-outline" variant="secondary" type="button" isDisabled={Boolean(asset.goldPricing) && (goldRefreshing || !online)} onClick={() => { if (asset.goldPricing) void refreshGoldPrices(true); else setValuationDialog(true) }} /> : <Button label="Add activity" icon={<Icon name="plus" size={17} />} className="button button-outline" variant="secondary" type="button" onClick={() => { setEditingEntry(null); setActivityDialog(true) }} />}
@@ -189,14 +189,14 @@ export function AssetDetailPage() {
 
     <section className="asset-detail-hero" aria-label="Current asset value">
       <Stack direction="vertical" gap={1}><small>{archived ? 'Value before archive' : 'Current value'}</small><strong>{formatIdr(currentValue)}</strong><small>{asset.balanceMode === 'VALUATION' ? `As of ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })}${currentValuation?.goldQuote ? '' : ' · manual estimate'}` : `Ledger balance · activity through ${formatDate(valueDate, { day: 'numeric', month: 'short', year: 'numeric' })}`}</small>{currentValuation?.goldQuote && <GoldValueDetails valuation={currentValuation} />}{(asset.goldPricing || currentValuation?.goldQuote) && !archived && <GoldValueStatus valuation={currentValuation} today={today} online={online} error={goldErrors[asset.id]} />}{previousValuation && currentValuation && <small>Change since {formatDate(previousValuation.asOfDate, { day: 'numeric', month: 'short', year: 'numeric' })}: {currentValuation.valueIdr > previousValuation.valueIdr ? '+' : ''}{formatIdr(currentValuation.valueIdr - previousValuation.valueIdr)}</small>}</Stack>
-      {showNative && currentValuation && <div className="asset-native-value"><span>Native value</span><strong>{nativeValue(currentValuation)}</strong><small>1 {currentValuation.nativeCurrency} = Rp {currentValuation.exchangeRate} · rate dated {formatDate(currentValuation.rateDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small></div>}
+      {showNative && currentValuation && <Stack as="div" className="asset-native-value" style={{ display: 'block' }}><span>Native value</span><strong>{nativeValue(currentValuation)}</strong><small>1 {currentValuation.nativeCurrency} = Rp {currentValuation.exchangeRate} · rate dated {formatDate(currentValuation.rateDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small></Stack>}
       {stale && !archived && <span className="stale-badge">Stale manual estimate</span>}
     </section>
 
-    <section className="section-block asset-detail-history" aria-labelledby="asset-detail-history-title"><div className="section-heading"><div><p className="eyebrow">VALUE HISTORY</p><h2 id="asset-detail-history-title">How the value changed</h2></div></div><AssetLineChart points={history} description={`${asset.name} value`} /></section>
+    <section className="section-block asset-detail-history" aria-labelledby="asset-detail-history-title"><Stack as="div" className="section-heading"><Stack as="div" style={{ display: 'block' }}><p className="eyebrow">VALUE HISTORY</p><h2 id="asset-detail-history-title">How the value changed</h2></Stack></Stack><AssetLineChart points={history} description={`${asset.name} value`} /></section>
 
-    <section className="section-block asset-timeline-section" aria-labelledby="asset-timeline-title"><div className="section-heading"><div><p className="eyebrow">DATED RECORDS</p><h2 id="asset-timeline-title">Activity and valuations</h2></div><span className="asset-record-count">{timeline.length} records</span></div>
-      {timeline.length === 0 ? <EmptyState className="empty-state" title="No dated records" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} description="Opening balances and manual valuations will appear here." /> : <div className="asset-timeline">
+    <section className="section-block asset-timeline-section" aria-labelledby="asset-timeline-title"><Stack as="div" className="section-heading"><Stack as="div" style={{ display: 'block' }}><p className="eyebrow">DATED RECORDS</p><h2 id="asset-timeline-title">Activity and valuations</h2></Stack><span className="asset-record-count">{timeline.length} records</span></Stack>
+      {timeline.length === 0 ? <EmptyState className="empty-state" title="No dated records" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} description="Opening balances and manual valuations will appear here." /> : <Stack as="div" className="asset-timeline">
         {visibleTimeline.map((record) => {
           if (record.kind === 'ACTIVITY') {
             const entry = record.entry
@@ -205,9 +205,9 @@ export function AssetDetailPage() {
             const linkedLiability = liabilityEntry ? liabilitiesById.get(liabilityEntry.liabilityId) : null
             return <article className="asset-timeline-row" key={entry.id}>
               <span className={`asset-timeline-marker${amountForEntry(entry) < 0 ? ' is-outflow' : ''}`} aria-hidden="true"><Icon name={entry.kind === 'TRANSFER_IN' || entry.kind === 'TRANSFER_OUT' ? 'arrow-right' : 'receipt'} size={16} /></span>
-              <div className="asset-timeline-main"><strong>{activityLabel(entry)}</strong><span>{formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}{entry.note ? ` · ${entry.note}` : ''}</span>{linkedTransaction && <small>Paid from · {linkedTransaction.description}</small>}{linkedLiability && <small>Liability settlement · {linkedLiability.name}; not a second expense</small>}{entry.transferId && <small>Internal transfer · paired record</small>}</div>
+              <Stack as="div" className="asset-timeline-main"><strong>{activityLabel(entry)}</strong><span>{formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}{entry.note ? ` · ${entry.note}` : ''}</span>{linkedTransaction && <small>Paid from · {linkedTransaction.description}</small>}{linkedLiability && <small>Liability settlement · {linkedLiability.name}; not a second expense</small>}{entry.transferId && <small>Internal transfer · paired record</small>}</Stack>
               <strong className={amountForEntry(entry) < 0 ? 'timeline-amount is-negative' : 'timeline-amount'}>{amountForEntry(entry) > 0 ? '+' : ''}{formatIdr(amountForEntry(entry))}</strong>
-              {!archived && canEditEntry(entry) && <div className="row-actions"><Button label={`Edit ${activityLabel(entry)}`} icon={<Icon name="edit" size={16} />} isIconOnly className="icon-button" variant="ghost" type="button" onClick={() => { setEditingEntry(entry); setActivityDialog(true) }} /><Button label={`Delete ${activityLabel(entry)}`} icon={<Icon name="trash" size={16} />} isIconOnly className="icon-button danger-icon" variant="destructive" type="button" onClick={() => setConfirmingActivity(entry)} /></div>}
+              {!archived && canEditEntry(entry) && <Stack as="div" className="row-actions"><Button label={`Edit ${activityLabel(entry)}`} icon={<Icon name="edit" size={16} />} isIconOnly className="icon-button" variant="ghost" type="button" onClick={() => { setEditingEntry(entry); setActivityDialog(true) }} /><Button label={`Delete ${activityLabel(entry)}`} icon={<Icon name="trash" size={16} />} isIconOnly className="icon-button danger-icon" variant="destructive" type="button" onClick={() => setConfirmingActivity(entry)} /></Stack>}
             </article>
           }
           const item = record.valuation
@@ -218,7 +218,7 @@ export function AssetDetailPage() {
             {item.goldQuote ? <GoldValueStatus valuation={item} today={today} online={true} /> : !archived && item.asOfDate <= today && daysSince(today, item.asOfDate) > STALE_AFTER_DAYS && <small>Stale</small>}
           </article>
         })}
-      </div>}
+      </Stack>}
         <RecordPagination count={timeline.length} page={currentTimelinePage} onPageChange={setTimelinePage} />
     </section>
 

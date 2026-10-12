@@ -1,7 +1,7 @@
 import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { LinkProvider } from '@astryxdesign/core/Link'
-import { Link as RouterLink, MemoryRouter, Route, Routes } from 'react-router-dom'
+import { Link as RouterLink, MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell'
 import { defaultPreferences, useSettingsStore } from '../state/settings-store'
@@ -31,6 +31,7 @@ afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   useSettingsStore.setState(defaultPreferences)
+  window.localStorage.clear()
 })
 
 describe('AppShell navigation', () => {
@@ -63,7 +64,7 @@ describe('AppShell navigation', () => {
     expect(document.querySelector('.page-content')).not.toHaveAttribute('data-scroll-panels')
   })
 
-  it('marks the active destination and preserves access while the sidebar collapses', () => {
+  it('keeps a collapsed section rail beside a second pane that follows the route', () => {
     render(
       <MemoryRouter initialEntries={['/assets']}>
         <Routes>
@@ -75,15 +76,121 @@ describe('AppShell navigation', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: 'Primary navigation' })
+    const sidebar = screen.getByRole('complementary', { name: 'Workspace navigation' })
+    expect(sidebar).toContainElement(navigation)
     expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { name: 'Assets page' }))
-    expect(navigation.querySelector('li[role="treeitem"][aria-selected="true"]')).toHaveAttribute('data-tree-id', 'assets')
+    expect(screen.queryByRole('region', { name: 'Budget workspace' })).not.toBeInTheDocument()
+
+    // The rail is always collapsed: one button per section, never a destination list.
+    const rail = within(screen.getByRole('navigation', { name: 'Sections' }))
+    expect(rail.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Overview',
+      'Portfolio',
+      'Manage',
+    ])
+
+    // The route owns the pane, and its rows stay flat siblings within one section.
+    const pane = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
+    expect(rail.getByRole('button', { name: 'Portfolio' })).toHaveAttribute('data-active', 'true')
+    expect(pane.getByRole('link', { name: 'Assets' })).toHaveAttribute('aria-current', 'page')
+    expect(pane.getAllByRole('link').map((link) => link.textContent)).toEqual(['Assets', 'PLN Token Tracker'])
+    expect(screen.queryByRole('treeitem')).not.toBeInTheDocument()
+
+    // A rail click moves the pane without navigating away from the current page.
+    fireEvent.click(rail.getByRole('button', { name: 'Overview' }))
+    expect(screen.getByRole('heading', { name: 'Assets page' })).toBeInTheDocument()
+    expect(pane.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Overview',
+      'Calendar',
+      'Commitments',
+      'Activity',
+    ])
+    expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-active', 'true')
+  })
+
+  it('collapses the second pane to an icon rail and expands it again', () => {
+    render(
+      <MemoryRouter initialEntries={['/assets']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="assets" element={<h1>Assets page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Collapsing remounts the SideNav root, so re-query rather than reuse the node.
+    const paneNav = () => screen.getByRole('navigation', { name: 'Primary navigation' })
+    expect(paneNav()).toHaveAttribute('data-sidebar-collapsed', 'false')
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' }).querySelector('[aria-current="page"]')).not.toBeNull()
+    expect(paneNav()).toHaveAttribute('data-sidebar-collapsed', 'true')
+
+    // Collapsing narrows the pane, not the rail, and destinations stay reachable by icon.
+    const rail = within(screen.getByRole('navigation', { name: 'Sections' }))
+    expect(rail.getByRole('button', { name: 'Portfolio' })).toHaveAttribute('data-active', 'true')
+    expect(within(paneNav()).getByRole('link', { name: 'Assets' })).toHaveAttribute('aria-current', 'page')
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' }).querySelector('li[role="treeitem"][aria-selected="true"]')).toHaveAttribute('data-tree-id', 'assets')
+    expect(paneNav()).toHaveAttribute('data-sidebar-collapsed', 'false')
+  })
+
+  it('reopens the second pane collapsed from the previous session', () => {
+    window.localStorage.setItem('kinsen-shell-nav-pane-collapsed', 'true')
+    render(
+      <MemoryRouter initialEntries={['/assets']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="assets" element={<h1>Assets page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveAttribute('data-sidebar-collapsed', 'true')
+  })
+
+  it('re-derives the pane from the route after a rail click left another section open', () => {
+    // Stands in for any in-app navigation to /activity (command palette, a link, a form).
+    function OverviewPage() {
+      const navigate = useNavigate()
+      return (
+        <>
+          <h1>Overview page</h1>
+          <button type="button" onClick={() => navigate('/activity')}>Jump to activity</button>
+        </>
+      )
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<OverviewPage />} />
+            <Route path="activity" element={<h1>Activity page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const rail = within(screen.getByRole('navigation', { name: 'Sections' }))
+    expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-active', 'true')
+
+    fireEvent.click(rail.getByRole('button', { name: 'Manage' }))
+    const pane = within(screen.getByRole('navigation', { name: 'Primary navigation' }))
+    expect(pane.getAllByRole('link').map((link) => link.textContent)).toEqual(['Settings'])
+    expect(screen.getByRole('heading', { name: 'Overview page' })).toBeInTheDocument()
+
+    // A route that maps to Overview pulls the pane back from the manual Manage choice.
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to activity' }))
+    expect(screen.getByRole('heading', { name: 'Activity page' })).toBeInTheDocument()
+    expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-active', 'true')
+    expect(pane.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Overview',
+      'Calendar',
+      'Commitments',
+      'Activity',
+    ])
   })
 
   it('navigates to secondary destinations and closes More without losing the current location', async () => {

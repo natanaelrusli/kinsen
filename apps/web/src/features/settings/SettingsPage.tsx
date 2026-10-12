@@ -4,6 +4,7 @@ import { Selector } from '@astryxdesign/core/Selector'
 import { Button } from '@astryxdesign/core/Button'
 import { Stack } from '@astryxdesign/core/Stack'
 import { Heading, Text } from '@astryxdesign/core/Text'
+import type { KeyboardEvent } from 'react'
 import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, type IconName } from '../../shared/components/Icon'
@@ -25,6 +26,22 @@ const manageLinks = [
   { heading: 'Account', label: 'Account & data', href: '/account', icon: 'settings' as IconName, description: 'Manage your saved budget and sign-in access.' },
 ]
 
+function moveSwatchFocus(event: KeyboardEvent<HTMLButtonElement>) {
+  const direction = event.key
+  if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(direction)) return
+  event.preventDefault()
+
+  const group = event.currentTarget.closest('[role="radiogroup"]')
+  const options = Array.from(group?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])
+  const index = options.indexOf(event.currentTarget)
+  if (index < 0 || options.length < 2) return
+  const forward = direction === 'ArrowRight' || direction === 'ArrowDown'
+  const nextIndex = (index + (forward ? 1 : -1) + options.length) % options.length
+  const nextOption = options[nextIndex]
+  nextOption?.focus()
+  nextOption?.click()
+}
+
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const category = categories.find((item) => item.value === searchParams.get('section')) ?? categories[0]!
@@ -38,6 +55,7 @@ export function SettingsPage() {
     }
   }, [category.value])
 
+  const persistenceStatus = useSettingsStore((state) => state.persistenceStatus)
   const colorMode = useSettingsStore((state) => state.colorMode)
   const setColorMode = useSettingsStore((state) => state.setColorMode)
   const themeColor = useSettingsStore((state) => state.themeColor)
@@ -73,9 +91,13 @@ export function SettingsPage() {
       <Stack as="header" gap={2} className="settings-header">
         <Heading level={1}>Settings</Heading>
         <Text>Personalize your workspace, one detail at a time.</Text>
-        <Stack direction="horizontal" gap={2} className="settings-save-note">
-          <Icon name="check" aria-hidden="true" style={{ width: 'var(--spacing-4)', height: 'var(--spacing-4)' }} />
-          <Text type="supporting">{category.value === 'bank-email' ? 'Bank email configuration is saved on this device when you select Save.' : 'Changes apply immediately and are saved on this device.'}</Text>
+        <Stack direction="horizontal" gap={2} className="settings-save-note" role="status" aria-live="polite" aria-atomic="true">
+          <Icon name={persistenceStatus === 'error' ? 'warning' : 'check'} aria-hidden="true" style={{ width: 'var(--spacing-4)', height: 'var(--spacing-4)' }} />
+          <Text type="supporting">{category.value === 'bank-email'
+            ? 'Bank email setup reports whether its save succeeded.'
+            : persistenceStatus === 'error'
+              ? 'Changes are applied, but could not be saved on this device. Allow browser storage and change a setting to try again.'
+              : 'Changes apply immediately and are saved on this device when browser storage is available.'}</Text>
         </Stack>
       </Stack>
 
@@ -143,9 +165,11 @@ export function SettingsPage() {
                 </Stack>
                 <Stack gap={2}>
                   <Text id="accent-hint" weight="semibold">Accent color</Text>
-                  <Stack className="settings-accent-grid" gap={2} role="radiogroup" aria-label="Accent color" aria-describedby="accent-hint">
+                  <Stack className="settings-accent-grid" gap={2} role="radiogroup" aria-orientation="horizontal" aria-label="Accent color" aria-describedby="accent-hint">
                     {themeColorOptions.map((option) => (
                       <button
+                        tabIndex={themeColor === option.value ? 0 : -1}
+                        onKeyDown={moveSwatchFocus}
                         key={option.value}
                         type="button"
                         role="radio"
@@ -166,9 +190,11 @@ export function SettingsPage() {
               <Stack className="settings-group" gap={4}>
                 <Heading level={3}>Surface palette</Heading>
                 <Text id="surface-hint">Sets backgrounds and panels independently of your accent.</Text>
-                <Stack className="settings-palette-grid" gap={2} role="radiogroup" aria-label="Surface palette" aria-describedby="surface-hint">
+                <Stack className="settings-palette-grid" gap={2} role="radiogroup" aria-orientation="horizontal" aria-label="Surface palette" aria-describedby="surface-hint">
                   {surfaceStyleOptions.map((option) => (
                     <button
+                      tabIndex={surfaceStyle === option.value ? 0 : -1}
+                      onKeyDown={moveSwatchFocus}
                       key={option.value}
                       type="button"
                       role="radio"
@@ -189,9 +215,11 @@ export function SettingsPage() {
                 <Heading level={3}>Typography</Heading>
                 <Stack gap={2}>
                   <Text id="heading-style-hint">Pairs a heading face with a body face. Uses fonts already on your device, so nothing is downloaded.</Text>
-                  <Stack className="settings-font-grid" gap={2} role="radiogroup" aria-label="Heading style" aria-describedby="heading-style-hint">
+                  <Stack className="settings-font-grid" gap={2} role="radiogroup" aria-orientation="horizontal" aria-label="Heading style" aria-describedby="heading-style-hint">
                     {headingStyleOptions.map((option) => (
                       <button
+                        tabIndex={headingStyle === option.value ? 0 : -1}
+                      onKeyDown={moveSwatchFocus}
                         key={option.value}
                         type="button"
                         role="radio"

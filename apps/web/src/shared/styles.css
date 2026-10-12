@@ -67,28 +67,38 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .brand-name { color: var(--ink-strong); font-size: 23px; font-weight: 750; letter-spacing: -0.07em; }
 .brand-name > span { color: var(--lime-dark); }
 .eyebrow { margin: 0; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: 0.13em; line-height: 1.3; }
-.app-side-nav { border-inline-end: var(--border-width) solid var(--app-sidebar-divider); background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
+.app-side-nav { background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
 .app-side-nav a { min-height: var(--spacing-11); border-radius: var(--radius-element); color: inherit; transition: background-color 140ms ease, color 140ms ease; }
 .app-side-nav a:hover { background: var(--app-sidebar-hover); color: var(--app-sidebar-ink); }
 .app-side-nav a[aria-current="page"] { background: var(--app-sidebar-selected); color: var(--app-sidebar-ink); font-weight: var(--font-weight-semibold); }
 .app-side-nav a[aria-current="page"]:hover { background: var(--color-sidebar-selected-hover); }
 .app-side-nav a[aria-current="page"] svg { color: var(--app-sidebar-ink); }
+.app-side-nav a:focus-visible { outline: 2px solid var(--app-sidebar-accent); outline-offset: 1px; }
+/* Collapsed pane: the 40px icon rail drops the expanded padding and section rhythm
+   so every icon keeps the same gap and stays inside the rail. */
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"] { background: var(--app-sidebar-collapsed-selected); }
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"]:hover { background: var(--color-sidebar-accent-muted-hover); }
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"] svg { color: var(--app-sidebar-accent); }
-.app-side-nav a:focus-visible { outline: 2px solid var(--app-sidebar-accent); outline-offset: 1px; }
-.app-side-nav-section[role="group"] { padding: var(--spacing-1) var(--spacing-3); }
-.app-side-nav-section > div:first-child { padding: var(--spacing-3) var(--spacing-3) var(--spacing-2); }
+.app-side-nav[data-sidebar-collapsed="true"] .app-side-nav-section[role="group"] { padding: 0; }
+.app-side-nav[data-sidebar-collapsed="true"] .app-side-nav-section > div:last-child { align-items: center; }
+/* Second pane: the rail already names the section, so the group only supplies rows. */
+.app-side-nav-section[role="group"] { padding: 0 var(--spacing-3); }
+/* Both vertical edges are quiet hairlines: they separate the two nav columns
+   from each other and from the page without competing with the item rows. */
+.app-nav-split { height: 100%; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); }
+.app-nav-rail { width: 80px; flex: 0 0 auto; align-items: stretch; padding-block: var(--spacing-3); padding-inline: var(--spacing-1); overflow-y: auto; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
+.app-nav-rail-item { display: flex; width: 100%; min-height: var(--spacing-12); align-items: center; justify-content: center; padding: var(--spacing-2) var(--spacing-1); border-width: 0; border-style: none; border-radius: var(--radius-element); background: transparent; color: var(--app-sidebar-muted); font: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
+.app-nav-rail-item:hover { background: var(--app-sidebar-hover); color: var(--app-sidebar-ink); }
+.app-nav-rail-item[data-active="true"] { background: var(--app-sidebar-selected); color: var(--app-sidebar-ink); }
+.app-nav-rail-item[data-active="true"] .app-nav-rail-label { font-weight: var(--font-weight-semibold); }
+.app-nav-rail-item:focus-visible { outline: 2px solid var(--app-sidebar-accent); outline-offset: 1px; }
+.app-nav-rail-item-content { max-width: 100%; }
+.app-nav-rail-label { max-width: 100%; overflow: hidden; font-size: 10px; font-weight: 650; line-height: 1.25; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.app-side-nav-heading { padding-inline: var(--spacing-3); }
 .app-side-nav-section > div:first-child > span:first-child > span { color: var(--app-sidebar-muted); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
-.app-side-nav .astryx-tree-list-item { min-height: var(--spacing-11); border-radius: var(--radius-element); color: var(--app-sidebar-muted); transition: background-color 140ms ease, color 140ms ease; }
-.app-side-nav .astryx-tree-list-item > a { justify-content: center; }
-.app-side-nav .astryx-tree-list-item > a:hover { background: transparent; }
-.app-side-nav .astryx-tree-list-item .astryx-tree-list-item-label { color: inherit; }
-.app-side-nav .astryx-tree-list-item:hover { background: var(--app-sidebar-hover); color: var(--app-sidebar-ink); }
-.app-side-nav .astryx-tree-list-item[data-selected="selected"] { background: var(--app-sidebar-selected); color: var(--app-sidebar-ink); font-weight: var(--font-weight-semibold); }
-.app-side-nav .astryx-tree-list-item[data-selected="selected"]:hover { background: var(--color-sidebar-selected-hover); }
-.app-side-nav [role="treeitem"][aria-selected="true"] .astryx-tree-list-item svg { color: var(--app-sidebar-accent); }
-.app-nav-section-label { display: block; padding: var(--spacing-3) var(--spacing-3) var(--spacing-2); color: var(--app-sidebar-muted); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.app-side-nav-section + .app-side-nav-section { margin-top: var(--spacing-3); }
+.app-side-nav-section a { color: var(--app-sidebar-muted); }
+.app-side-nav-section a:hover { color: var(--app-sidebar-ink); }
 .app-top-nav { border-bottom: var(--border-width) solid var(--line); padding-inline: var(--spacing-5); background: var(--canvas); }
 .topbar-page-title { min-width: 0; margin-inline-start: var(--spacing-3); padding-inline-start: var(--spacing-4); border-inline-start: var(--border-width) solid var(--line-strong); color: var(--color-text-secondary); white-space: nowrap; }
 .app-topbar-controls { min-width: 0; flex: 0 0 auto; }
@@ -205,6 +215,13 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .asset-chart-point { fill: var(--surface); stroke: var(--green); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .asset-chart figcaption { display: flex; justify-content: space-between; gap: 12px; padding-top: 7px; color: var(--muted); font-size: 12px; }
 .asset-chart-empty, .asset-muted { padding: 14px 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+ .asset-chart-empty { margin: 0; }
+ .asset-chart-data { margin-block-start: var(--spacing-3); }
+ .asset-chart-data summary { color: var(--color-text-accent); font-size: var(--font-size-sm); cursor: pointer; text-underline-offset: var(--spacing-0-5); }
+ .asset-chart-data[open] summary { margin-block-end: var(--spacing-2); }
+ .asset-chart-data table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+ .asset-chart-data th, .asset-chart-data td { padding: var(--spacing-2) var(--spacing-3); border-block-end: var(--border-width) solid var(--line); text-align: start; }
+ .asset-chart-data td { text-align: end; }
 .asset-period-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); }
 .asset-period-summary > div:not(.asset-period-flows) { display: grid; gap: 4px; }
 .asset-period-summary > div > span:first-child { color: var(--muted); font-size: 12px; }
@@ -420,29 +437,31 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 /* Commitments and activity */
 .commitments-section, .activity-section { margin-top: 18px; }
 .count-pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 10px; }
-.commitment-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.commitment-card { min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.commitment-card.is-overdue { border-color: var(--color-border-red); background: var(--color-background-danger-subtle); }
-.commitment-card.is-complete { background: var(--surface-soft); }
-.commitment-card-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.commitment-card-title { display: flex; min-width: 0; align-items: center; gap: 9px; }
-.commitment-state-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--green-soft); color: var(--green); }
-.commitment-state-icon.warning { background: var(--rust-soft); color: var(--rust); }
-.commitment-state-icon.done { background: var(--green-soft); color: var(--green); }
-.commitment-card-title h3 { overflow: hidden; max-width: 200px; margin: 0; color: var(--ink-strong); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.commitment-card-title p { margin: 3px 0 0; color: var(--muted); font-size: 9px; text-transform: capitalize; }
-.commitment-card-title i { font-style: normal; }
-.commitment-card-due { display: grid; flex: 0 0 auto; gap: 4px; text-align: right; }
-.commitment-card-due span { color: var(--muted); font-size: 9px; }
-.commitment-card-due strong { color: var(--ink-strong); font-size: 12px; font-variant-numeric: tabular-nums; }
-.commitment-progress-row { display: flex; align-items: center; gap: 9px; margin: 13px 0 9px; }
-.commitment-progress-row .app-progress-bar { flex: 1; min-width: 0; }
+ .commitment-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; margin: 0; padding: 0; list-style: none; }
+ .commitment-list > li { min-width: 0; border-block-end: var(--border-width) solid var(--line); }
+ .commitment-list > li:first-child { border-block-start: var(--border-width) solid var(--line); }
+ .commitment-card { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .8fr) minmax(0, 1fr); align-items: center; gap: var(--spacing-3); min-width: 0; padding: var(--spacing-3) var(--spacing-2); border: 0; border-radius: 0; background: transparent; }
+ .commitment-card.is-overdue { background: var(--color-background-danger-subtle); }
+ .commitment-card.is-complete { background: var(--surface-soft); }
+ .commitment-card-main { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--spacing-3); }
+ .commitment-card-title { display: flex; min-width: 0; align-items: center; gap: var(--spacing-2); }
+ .commitment-state-icon { display: grid; width: var(--spacing-8); height: var(--spacing-8); flex: 0 0 auto; place-items: center; border-radius: var(--radius-control); background: var(--green-soft); color: var(--green); }
+ .commitment-state-icon.warning { background: var(--rust-soft); color: var(--rust); }
+ .commitment-state-icon.done { background: var(--green-soft); color: var(--green); }
+ .commitment-card-title h3 { min-width: 0; overflow: hidden; margin: 0; color: var(--ink-strong); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+ .commitment-card-title p { margin: var(--spacing-1) 0 0; color: var(--muted); font-size: var(--font-size-xs); text-transform: capitalize; }
+ .commitment-card-title i { font-style: normal; }
+ .commitment-card-due { display: grid; min-width: 0; flex: 0 0 auto; gap: var(--spacing-1); text-align: right; }
+ .commitment-card-due span { color: var(--muted); font-size: var(--font-size-xs); }
+ .commitment-card-due strong { color: var(--ink-strong); font-size: var(--font-size-sm); font-variant-numeric: tabular-nums; }
+ .commitment-progress-row { display: flex; min-width: 0; align-items: center; gap: var(--spacing-2); margin: 0; }
+ .commitment-progress-row .app-progress-bar { flex: 1; min-width: 0; }
+ .commitment-progress-row .app-progress-bar [role="progressbar"] { height: var(--spacing-1); }
+ .commitment-progress-row > span { flex: 0 0 auto; color: var(--muted); font-size: var(--font-size-xs); text-align: right; white-space: nowrap; }
+ .commitment-card-bottom { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--spacing-2); color: var(--muted); font-size: var(--font-size-xs); }
+ .commitment-card-bottom .row-actions { flex: 0 0 auto; }
+ .commitment-card-bottom .icon-button { width: var(--spacing-9); height: var(--spacing-9); }
 .app-progress-bar [role="progressbar"] { height: 6px; }
-.commitment-progress-row .app-progress-bar [role="progressbar"] { height: 5px; }
-.commitment-progress-row > span { min-width: 60px; color: var(--muted); font-size: 9px; text-align: right; }
-.commitment-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 9px; }
-.commitment-card-bottom .row-actions { margin-right: -7px; }
-.commitment-card-bottom .icon-button { width: 33px; height: 33px; }
 .activity-summary-row { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .activity-summary-row > div:first-child { display: grid; gap: 4px; }
 .activity-summary-row > div:first-child > strong { color: var(--ink-strong); font-size: 22px; font-variant-numeric: tabular-nums; }
@@ -496,6 +515,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .budget-form.form-wizard { display: grid; min-width: 0; gap: var(--spacing-4); }
 .budget-form .form-wizard-body { max-height: none; overflow: visible; }
 .budget-form .form-wizard-actions { position: sticky; bottom: 0; padding: var(--spacing-3); border-top: var(--border-width) solid var(--line); background: var(--surface); }
+.budget-form .form-wizard-stepper .astryx-step-label[data-progress="not-started"] { color: var(--color-text-primary); }
 
 
 @keyframes form-dialog-enter {
@@ -651,7 +671,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .font-swatch.is-selected { border-color: var(--color-accent); background: var(--color-accent-muted); }
 .font-swatch:focus-visible { outline: var(--spacing-0-5) solid var(--color-accent); outline-offset: var(--spacing-1); }
 .font-swatch-sample { font-family: var(--font-swatch-family); font-size: var(--font-size-2xl); line-height: 1.1; }
-.font-swatch-label { min-width: 0; font-size: var(--font-size-xs); color: var(--color-text-secondary); text-align: center; overflow-wrap: anywhere; }
+.font-swatch.is-selected .font-swatch-label { color: var(--color-text-primary); }
 .font-swatch.is-editorial { --font-swatch-family: Georgia, "Times New Roman", serif; }
 .font-swatch.is-modern { --font-swatch-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .font-swatch.is-grotesk { --font-swatch-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
@@ -738,7 +758,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 
 @media (max-width: 850px) {
   .day-detail-panel { position: static; }
-  .commitment-list { grid-template-columns: 1fr; }
+  .commitment-card { grid-template-columns: minmax(0, 1fr); }
   .asset-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .asset-breakdown-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .asset-row-main { grid-template-columns: var(--spacing-9) minmax(0, 1fr) minmax(0, auto); gap: var(--spacing-2); }
@@ -836,7 +856,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .three-stats .stat-card:last-child { grid-column: span 2; min-height: 104px; }
   .stat-card > strong { font-size: 19px; }
   .commitments-section, .activity-section { margin-top: 12px; }
-  .commitment-card { padding: 12px; }
+  .commitment-card { padding-block: var(--spacing-2); padding-inline: 0; }
   .commitment-card-bottom { align-items: flex-start; }
   .commitment-card-bottom .row-actions { flex-wrap: nowrap; }
   .activity-summary-row { align-items: flex-start; padding: 13px; }
@@ -864,7 +884,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .icon-button, .row-actions .icon-button, .commitment-card-bottom .icon-button, .safe-card-top > a { min-width: var(--spacing-11); width: var(--spacing-11); height: var(--spacing-11); }
   .row-actions { gap: var(--spacing-2); }
   .commitment-card-bottom { flex-wrap: wrap; }
-  .commitment-card-bottom .row-actions { margin-right: 0; margin-left: auto; }
+  .commitment-card-bottom .row-actions { margin-inline-start: auto; }
   .form-dialog { max-width: calc(100vw - var(--spacing-4)); }
   .form-actions { padding-bottom: max(var(--spacing-2), env(safe-area-inset-bottom)); }
   .form-stack { scroll-padding-bottom: calc(var(--spacing-12) + var(--spacing-4)); }
@@ -934,9 +954,9 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .page-actions { gap: var(--spacing-2); }
   .page-actions .button { padding-inline: var(--spacing-2); font-size: var(--font-size-base); }
   .calendar-panel { width: calc(100% + var(--spacing-4)); margin-inline: calc(var(--spacing-2) - var(--spacing-4)); padding-inline: 0; }
-  .commitment-card-due { max-width: 80px; }
-  .commitment-card-due strong { font-size: 10px; }
-  .commitment-card-bottom > span { max-width: 116px; font-size: 8px; }
+  .commitment-card-due { max-width: calc(var(--spacing-12) + var(--spacing-5)); }
+  .commitment-card-due strong { font-size: var(--font-size-xs); }
+  .commitment-card-bottom > span { max-width: calc(var(--spacing-12) * 2); font-size: var(--font-size-xs); }
 }
 
 @media (max-width: 900px) {

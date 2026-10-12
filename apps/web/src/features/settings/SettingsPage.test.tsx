@@ -1,6 +1,7 @@
+import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPreferences, useSettingsStore } from '../../shared/state/settings-store'
 import { SettingsPage } from './SettingsPage'
 
@@ -11,13 +12,14 @@ function renderSettingsPage() {
 describe('SettingsPage', () => {
   beforeEach(() => {
     window.localStorage.clear()
-    useSettingsStore.setState(defaultPreferences)
+    useSettingsStore.setState({ ...defaultPreferences, persistenceStatus: 'saved' })
   })
 
   afterEach(() => {
     cleanup()
     window.localStorage.clear()
-    useSettingsStore.setState(defaultPreferences)
+    useSettingsStore.setState({ ...defaultPreferences, persistenceStatus: 'saved' })
+    vi.restoreAllMocks()
     window.history.replaceState(null, '', '/')
   })
 
@@ -140,7 +142,60 @@ describe('SettingsPage', () => {
     expect(preview).toHaveTextContent('Dark')
   })
 
-  it('keeps the visual pickers reachable by keyboard', () => {    renderSettingsPage()
+  it('uses one tab stop and keeps arrow-key radio navigation isolated by group', () => {
+    renderSettingsPage()
+
+    const accents = screen.getByRole('radiogroup', { name: 'Accent color' })
+    const surfaces = screen.getByRole('radiogroup', { name: 'Surface palette' })
+    const evergreen = within(accents).getByRole('radio', { name: 'Evergreen' })
+    const ocean = within(accents).getByRole('radio', { name: 'Ocean' })
+    const warm = within(surfaces).getByRole('radio', { name: /Warm/ })
+    expect(within(accents).getAllByRole('radio').filter((radio) => radio.tabIndex === 0)).toHaveLength(1)
+
+    evergreen.focus()
+    fireEvent.keyDown(evergreen, { key: 'ArrowRight' })
+
+    expect(ocean).toHaveFocus()
+    expect(ocean).toBeChecked()
+    expect(warm).toBeChecked()
+    expect(within(surfaces).getAllByRole('radio').filter((radio) => radio.tabIndex === 0)).toEqual([warm])
+  })
+
+  it('announces when a preference cannot be saved and clears the warning after a successful save', () => {
+    renderSettingsPage()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('private storage exception')
+    })
+    const status = document.querySelector('.settings-save-note')!
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Ocean' }))
+    expect(status).toHaveTextContent('could not be saved on this device')
+    expect(status).not.toHaveTextContent('private storage exception')
+    expect(useSettingsStore.getState().themeColor).toBe('ocean')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Lilac' }))
+    expect(status).toHaveTextContent('Changes apply immediately and are saved on this device when browser storage is available.')
+    expect(useSettingsStore.getState().persistenceStatus).toBe('saved')
+    setItem.mockRestore()
+  })
+
+  it('selects swatches with native Space and Enter activation', async () => {
+    const user = userEvent.setup()
+    renderSettingsPage()
+
+    const lilac = screen.getByRole('radio', { name: 'Lilac' })
+    lilac.focus()
+    await user.keyboard(' ')
+    expect(lilac).toBeChecked()
+
+    const terracotta = screen.getByRole('radio', { name: 'Terracotta' })
+    terracotta.focus()
+    await user.keyboard('{Enter}')
+    expect(terracotta).toBeChecked()
+  })
+
+  it('keeps the visual pickers reachable by keyboard', () => {
+    renderSettingsPage()
 
     const dusk = screen.getByRole('radio', { name: /Dusk · twilight violet/ })
     dusk.focus()

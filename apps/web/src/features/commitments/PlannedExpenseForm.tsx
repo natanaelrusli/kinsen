@@ -6,7 +6,7 @@ import type { PlannedExpense } from '@kinsen/budget-domain'
 import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { newId } from '../../shared/format/id'
 import { FormWizardDialog } from '../../shared/components/FormWizard'
-import { Grid } from '@astryxdesign/core/Grid'
+import { Stack } from '@astryxdesign/core/Stack'
 import { CurrencyAmountField, AstryxDateField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
 import { useBudgetStore } from '../../shared/state/budget-store'
 
@@ -36,25 +36,27 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
   const [submitError, setSubmitError] = useState<string | null>(null)
   const period = snapshot?.period
   const eligibleCategories = (snapshot?.categories ?? []).filter((category) => category.mode !== 'DAILY').sort((left, right) => Number(right.mode === 'SCHEDULED') - Number(left.mode === 'SCHEDULED'))
+  const initialCategoryMode = eligibleCategories.find((category) => category.id === initial?.categoryId)?.mode
   const defaultValues: PlannedExpenseFormValues = {
     name: initial?.name ?? '',
     amount: initial?.amount ?? 0,
     categoryId: initial?.categoryId ?? eligibleCategories[0]?.id ?? '',
     dueDate: initial?.dueDate ?? period?.startDate ?? '',
-    cadence: initial?.cadence ?? 'ONCE',
+    cadence: initial?.cadence && initialCategoryMode === 'PERIOD' ? 'ONCE' : initial?.cadence ?? 'ONCE',
     endDate: initial?.endDate ?? period?.endDate ?? '',
   }
-  const { control, handleSubmit, reset, watch, trigger } = useForm<PlannedExpenseFormValues>({
+  const { control, handleSubmit, watch, trigger, setValue } = useForm<PlannedExpenseFormValues>({
     resolver: zodResolver(plannedExpenseSchema),
     defaultValues,
   })
   const cadence = watch('cadence')
+  const categoryId = watch('categoryId')
+  const categoryMode = eligibleCategories.find((category) => category.id === categoryId)?.mode
+  const recurringAllowed = categoryMode === 'SCHEDULED' || (categoryMode === undefined && cadence !== 'ONCE')
 
   useLayoutEffect(() => {
-    if (!open) return
-    setSubmitError(null)
-    reset(defaultValues)
-  }, [open, initial, reset])
+    if (categoryMode === 'PERIOD' && cadence !== 'ONCE') setValue('cadence', 'ONCE', { shouldValidate: true })
+  }, [cadence, categoryMode, setValue])
 
   const onSubmit = handleSubmit(async (values) => {
     const expense: PlannedExpense = {
@@ -82,7 +84,7 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
           fields: ['name', 'amount', 'categoryId'],
           content: <>
             <AstryxTextField control={control} name="name" label="Name" autoComplete="off" maxLength={80} className="field" />
-            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+            <Stack direction="vertical" gap={3}>
               <CurrencyAmountField control={control} name="amount" label="Amount" prefix={<span>Rp</span>} className="field" />
               <AstryxSelectField
                 control={control}
@@ -90,16 +92,21 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
                 label="Category"
                 placeholder="Choose category"
                 options={eligibleCategories.map((category) => ({ value: category.id, label: `${category.name}${category.mode === 'SCHEDULED' ? ' · scheduled' : ''}` }))}
+                onValueChange={(value) => {
+                  if (eligibleCategories.find((category) => category.id === value)?.mode !== 'SCHEDULED') {
+                    setValue('cadence', 'ONCE', { shouldValidate: true })
+                  }
+                }}
                 className="field"
               />
-            </Grid>
+            </Stack>
           </>,
         },
         {
           label: 'Schedule',
           fields: ['dueDate', 'cadence', 'endDate'],
           content: <>
-            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+            <Stack direction="vertical" gap={3}>
               <AstryxDateField control={control} name="dueDate" label="Due date" min={period?.startDate} max={period?.endDate} className="field" />
               <AstryxSelectField
                 control={control}
@@ -107,12 +114,14 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
                 label="Repeats"
                 options={[
                   { value: 'ONCE', label: 'Does not repeat' },
-                  { value: 'WEEKLY', label: 'Weekly' },
-                  { value: 'MONTHLY', label: 'Monthly' },
+                  ...(recurringAllowed ? [
+                    { value: 'WEEKLY', label: 'Weekly' },
+                    { value: 'MONTHLY', label: 'Monthly' },
+                  ] : []),
                 ]}
                 className="field"
               />
-            </Grid>
+            </Stack>
             {cadence !== 'ONCE' && <AstryxDateField
               control={control}
               name="endDate"

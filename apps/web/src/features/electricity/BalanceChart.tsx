@@ -240,7 +240,7 @@ export function BalanceChart({ observations }: { observations: readonly TokenObs
         <Text type="supporting" className="electricity-chart-summary">
           {first.id === last.id
             ? `One reading · ${formatKwh(last.remainingKwh)} on ${formatDate(last.date)}`
-            : `${metricNumber.format(first.remainingKwh - last.remainingKwh)} kWh used across ${formatDate(first.date, { day: 'numeric', month: 'short' })} – ${formatDate(last.date, { day: 'numeric', month: 'short' })} · balance, not consumption`}
+            : `Net balance change: ${metricNumber.format(last.remainingKwh - first.remainingKwh)} kWh across ${formatDate(first.date, { day: 'numeric', month: 'short' })} – ${formatDate(last.date, { day: 'numeric', month: 'short' })} · includes recorded refill credit`}
         </Text>
       )}
     </Stack>

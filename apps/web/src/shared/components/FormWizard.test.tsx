@@ -2,9 +2,54 @@ import type { FormEvent } from 'react'
 import userEvent from '@testing-library/user-event'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useForm } from 'react-hook-form'
+import { AstryxDateField, AstryxSelectField } from './AstryxFields'
 import { FormWizard } from './FormWizard'
 
+function UnnamedDateWizard() {
+  const { control, setError } = useForm<{ dueDate: string }>({ defaultValues: { dueDate: '' } })
+  return <FormWizard
+    steps={[{ label: 'Schedule', fields: ['dueDate'], content: <AstryxDateField control={control} name="dueDate" label="Due date" /> }]}
+    validateStep={() => { setError('dueDate', { type: 'required', message: 'Enter a date.' }); return false }}
+    onSubmit={(event) => event.preventDefault()}
+    submitLabel="Save"
+  />
+}
+
+function SelectorWizard() {
+  const { control, setError } = useForm<{ name: string; categoryId: string }>({ defaultValues: { name: 'Known', categoryId: '' } })
+  return <FormWizard
+    steps={[{
+      label: 'Details',
+      fields: ['name', 'categoryId'],
+      content: <>
+        <input name="name" aria-label="Name" value="Known" readOnly />
+        <AstryxSelectField control={control} name="categoryId" label="Category" options={[{ value: 'food', label: 'Food' }]} />
+      </>,
+    }]}
+    validateStep={() => { setError('categoryId', { type: 'required', message: 'Choose a category.' }); return false }}
+    onSubmit={(event) => event.preventDefault()}
+    submitLabel="Save"
+  />
+}
+
 afterEach(cleanup)
+
+it('focuses an invalid native date input that has no form name', async () => {
+  const user = userEvent.setup()
+  render(<UnnamedDateWizard />)
+
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  expect(screen.getByLabelText('Due date')).toHaveFocus()
+})
+
+it('focuses an invalid selector trigger instead of an earlier valid named input', async () => {
+  const user = userEvent.setup()
+  render(<SelectorWizard />)
+
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  expect(screen.getByRole('combobox', { name: 'Category' })).toHaveFocus()
+})
 
 describe('FormWizard', () => {
   it('focuses the first invalid field and the new step context in both directions', async () => {

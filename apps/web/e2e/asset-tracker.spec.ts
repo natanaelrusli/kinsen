@@ -11,6 +11,18 @@ const assetPurposeLabels: Record<AssetPurpose, string> = {
   OTHER: 'Other',
 }
 
+type ShellSection = 'Overview' | 'Portfolio' | 'Manage'
+
+/**
+ * The shell nav is two levels: the collapsed rail switches sections, the pane
+ * beside it carries that section's destinations. Navigation always goes through
+ * both, so the rail click is part of reaching a destination.
+ */
+async function openDestination(page: Page, section: ShellSection, destination: string) {
+  await page.locator('.app-nav-rail').getByRole('button', { name: section, exact: true }).click()
+  await page.locator('.app-side-nav').getByRole('link', { name: destination, exact: true }).click()
+}
+
 async function addAsset(page: Page, details: { name: string; type: AssetType; institution: string; purpose: AssetPurpose; amount: string; exchangeRate?: string }) {
   await page.getByRole('button', { name: 'Add asset' }).first().click()
   const dialog = page.getByRole('dialog', { name: 'Add an asset' })
@@ -317,38 +329,47 @@ test('persists an explicit mode and resumes following system appearance', async 
   await expect(page.locator('.app-top-nav').getByRole('button', { name: 'Appearance', exact: true })).toBeVisible()
 })
 
-test('renders the Astryx shell nav with searchable, resizable, and mobile navigation', async ({ page }) => {
+test('renders the Astryx shell nav with searchable, section rail, and mobile navigation', async ({ page }) => {
   await page.goto('/?asset-tracker-e2e=1&sidebar-e2e=1')
   await page.setViewportSize({ width: 1440, height: 900 })
   const sidebar = page.locator('.app-side-nav')
   await expect(sidebar).toBeVisible()
-  await expect(sidebar.getByRole('treeitem', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(sidebar.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page')
 
-  const initialSidebarWidth = await sidebar.evaluate((element) => element.getBoundingClientRect().width)
-  const resizeHandle = page.getByTestId('astryx-sidenav-resize-handle')
-  await sidebar.hover()
-  const handleBox = await resizeHandle.boundingBox()
-  if (!handleBox) throw new Error('The shell navigation resize handle has no layout box.')
-  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(handleBox.x + handleBox.width / 2 + 60, handleBox.y + handleBox.height / 2, { steps: 5 })
-  await page.mouse.up()
-  await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().width)).toBe(initialSidebarWidth + 60)
+  // The section rail is always collapsed: it switches the pane beside it, never the route.
+  const rail = page.locator('.app-nav-rail')
+  await expect(rail.getByRole('button')).toHaveText(['Overview', 'Portfolio', 'Manage'])
+  await expect(rail.getByRole('button', { name: 'Manage' })).toHaveAttribute('data-active', 'true')
+  await expect(sidebar.getByRole('link')).toHaveText(['Settings'])
 
-  await sidebar.getByRole('link', { name: 'Calendar', exact: true }).click()
-  await expect(sidebar.getByRole('treeitem', { name: 'Calendar', exact: true })).toHaveAttribute('aria-selected', 'true')
+  // The pane collapses to an icon rail of its own and keeps its destinations reachable.
+  const expandedPaneWidth = await sidebar.evaluate((element) => element.getBoundingClientRect().width)
+  await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click()
+  await expect(sidebar).toHaveAttribute('data-sidebar-collapsed', 'true')
+  const collapsedPaneWidth = await sidebar.evaluate((element) => element.getBoundingClientRect().width)
+  expect(collapsedPaneWidth).toBeLessThan(expandedPaneWidth)
+  await expect(sidebar.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()
+  await sidebar.getByRole('button', { name: 'Expand sidebar' }).click()
+  await expect(sidebar).toHaveAttribute('data-sidebar-collapsed', 'false')
+
+  await rail.getByRole('button', { name: 'Portfolio' }).click()
+  await expect(sidebar.getByRole('link')).toHaveText(['Assets', 'PLN Token Tracker'])
+  // The rail switches the pane without navigating: the page stays where it was.
+  await expect(page.getByRole('heading', { name: 'Choose a destination' })).toBeVisible()
+
+  await sidebar.getByRole('link', { name: 'Assets', exact: true }).click()
+  await expect(sidebar.getByRole('link', { name: 'Assets', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(rail.getByRole('button', { name: 'Portfolio' })).toHaveAttribute('data-active', 'true')
 
   await page.keyboard.press('Control+k')
   const palette = page.getByRole('dialog', { name: 'Search pages and commands' })
   await expect(palette).toBeVisible()
   await palette.getByRole('combobox').fill('commitments')
   await palette.getByRole('option', { name: 'Commitments', exact: true }).click()
-  await expect(sidebar.getByRole('treeitem', { name: 'Commitments', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(sidebar.getByRole('link', { name: 'Commitments', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-active', 'true')
+  await expect(sidebar.getByRole('link')).toHaveText(['Overview', 'Calendar', 'Commitments', 'Activity'])
   await expect(palette).toBeHidden()
-
-  await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click()
-  await expect(sidebar.getByRole('link', { name: 'Commitments', exact: true })).toBeVisible()
-  await sidebar.getByRole('button', { name: 'Expand sidebar' }).click()
 
   await page.setViewportSize({ width: 320, height: 667 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
@@ -432,7 +453,7 @@ test('groups financial metrics accessibly and reflows without horizontal overflo
 test('stretches the WHERE IT GOES card to match the dashboard row height', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?asset-tracker-e2e=1&workspace-e2e=1')
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expect(page.getByRole('heading', { name: 'Your money, in focus', level: 1 })).toBeVisible()
 
   const category = page.getByRole('region', { name: 'Category pulse' })
@@ -702,10 +723,10 @@ test('prices exact gold packages across sources, appends only changed holdings, 
   await expectPosition(page, 27_450_000, 27_350_000)
   await expectBudgetUnchanged()
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expectPosition(page, 27_450_000, 27_350_000, true)
   await expectBudgetUnchanged()
-  await page.getByRole('link', { name: 'Assets', exact: true }).click()
+  await openDestination(page, 'Portfolio', 'Assets')
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByRole('button', { name: 'Refresh price for Antam packages', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Update value for Antam packages', exact: true })).toHaveCount(0)
@@ -728,10 +749,10 @@ test('prices exact gold packages across sources, appends only changed holdings, 
   await expectPosition(page, 27_650_000, 27_550_000)
   await expectBudgetUnchanged()
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expectPosition(page, 27_650_000, 27_550_000, true)
   await expectBudgetUnchanged()
-  await page.getByRole('link', { name: 'Assets', exact: true }).click()
+  await openDestination(page, 'Portfolio', 'Assets')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('link', { name: /Antam packages/ }).click()
   await expectGoldDetail(page, 25_400_000, 2)
@@ -817,7 +838,7 @@ test('prices exact gold packages across sources, appends only changed holdings, 
   await expect(page.getByRole('button', { name: 'Update value for Legacy manual gold', exact: true })).toBeVisible()
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expect(page.getByRole('heading', { name: 'Your money, in focus', level: 1 })).toBeVisible()
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 })
@@ -854,12 +875,12 @@ test('retains saved gold through failed, missing, older and stale quotes, then r
   await expect(page.getByRole('heading', { name: 'Assets', level: 1 })).toBeVisible()
   await expectBudgetUnchanged()
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expect(page.getByText('Gold prices are currently unavailable.', { exact: true })).toBeVisible()
   await expect(page.getByText('Stale gold price', { exact: true })).toBeVisible()
   await expect(page.locator('.dashboard-assets-metrics').getByText(idr(27_800_000), { exact: true }).first()).toBeVisible()
   await expectBudgetUnchanged()
-  await page.getByRole('link', { name: 'Assets', exact: true }).click()
+  await openDestination(page, 'Portfolio', 'Assets')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('link', { name: /Retained Antam/ }).click()
   await expectGoldDetail(page, 25_200_000, 1)
@@ -920,12 +941,12 @@ test('retains saved gold through failed, missing, older and stale quotes, then r
   await page.getByRole('link', { name: 'All assets', exact: true }).click()
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.getByRole('link', { name: 'Overview', exact: true }).click()
+  await openDestination(page, 'Overview', 'Overview')
   await expect(page.getByRole('heading', { name: 'Your money, in focus', level: 1 })).toBeVisible()
   await expect(page.getByText(/Stale gold price/)).toBeVisible()
   await expect(page.locator('.dashboard-assets-metrics').getByText(idr(28_000_000), { exact: true }).first()).toBeVisible()
   await expectBudgetUnchanged()
-  await page.getByRole('link', { name: 'Assets', exact: true }).click()
+  await openDestination(page, 'Portfolio', 'Assets')
   await page.setViewportSize({ width: 390, height: 844 })
 
   await page.evaluate(async () => {

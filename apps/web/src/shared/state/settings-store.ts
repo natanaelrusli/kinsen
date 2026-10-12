@@ -108,6 +108,7 @@ export type AppPreferences = {
 }
 
 type SettingsState = AppPreferences & {
+  persistenceStatus: 'saved' | 'error'
   setColorMode: (colorMode: ColorMode) => void
   setThemeColor: (themeColor: ThemeColor) => void
   setSurfaceStyle: (surfaceStyle: SurfaceStyle) => void
@@ -193,12 +194,13 @@ function readPreferences(): AppPreferences {
   }
 }
 
-function savePreferences(preferences: AppPreferences) {
-  if (typeof window === 'undefined') return
+function savePreferences(preferences: AppPreferences): boolean {
+  if (typeof window === 'undefined') return false
   try {
     window.localStorage.setItem(preferencesStorageKey, JSON.stringify(preferences))
+    return true
   } catch {
-    // Keep the in-memory preference usable when browser storage is unavailable.
+    return false
   }
 }
 
@@ -220,12 +222,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       cheerTone: changes.cheerTone ?? current.cheerTone,
       celebrateOnSave: changes.celebrateOnSave ?? current.celebrateOnSave,
     }
-    savePreferences(preferences)
-    set(changes)
+    set({ ...changes, persistenceStatus: savePreferences(preferences) ? 'saved' : 'error' })
   }
 
   return {
     ...readPreferences(),
+    persistenceStatus: 'saved',
     setColorMode: (colorMode) => update({ colorMode }),
     setThemeColor: (themeColor) => update({ themeColor }),
     setSurfaceStyle: (surfaceStyle) => update({ surfaceStyle }),

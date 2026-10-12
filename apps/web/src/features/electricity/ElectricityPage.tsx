@@ -110,7 +110,7 @@ function MetricCard({ label, value, detail, status }: { label: string; value: st
     <Card className="electricity-metric-card">
       <Stack gap={1}>
         <Text type="label">{label}</Text>
-        <Heading level={3} className="electricity-metric-value">{value}</Heading>
+        <Text type="large" className="electricity-metric-value">{value}</Text>
         <Text type="supporting">{detail}</Text>
         {status && <StatusDot variant={status} label={status === 'warning' ? 'Estimate warning' : 'Data needs attention'} />}
       </Stack>

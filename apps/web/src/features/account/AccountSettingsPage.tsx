@@ -1,3 +1,4 @@
+import { Stack } from '@astryxdesign/core/Stack'
 import { Button } from '@astryxdesign/core/Button'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { useState, type FormEvent } from 'react'
@@ -7,6 +8,7 @@ import { PageHeader } from '../../shared/components/Primitives'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { budgetRepository } from '../../infrastructure/repositories/api-budget-repository'
 import { useAssetStore } from '../../shared/state/asset-store'
+import { AiAgentConnectionPanel } from './AiAgentConnectionPanel'
 
 type AccountAction = 'reset' | 'deactivate'
 
@@ -80,14 +82,15 @@ export function AccountSettingsPage() {
       : null
 
   return (
-    <div className="account-settings-page">
+    <Stack as="div" className="account-settings-page" gap={0}>
       <PageHeader eyebrow="ACCOUNT" title="Account settings" description="Manage the budget data saved to Kinsen and your sign-in access." actions={<Button label="Back to settings" variant="secondary" className="button button-outline" href="/settings" />} />
 
       {notice && <p className="success-notice" role="status">{notice}</p>}
 
-      <div className="account-settings-list">
+      <Stack as="div" className="account-settings-list">
+        <AiAgentConnectionPanel />
         <section className="account-setting-card" aria-labelledby="reset-account-title">
-          <div>
+          <Stack as="div" style={{ display: 'block' }} gap={0}>
             <p className="eyebrow">YOUR DATA</p>
             <h2 id="reset-account-title">Reset all account data</h2>
             <p>Delete your budget, assets, liabilities, PLN Token Tracker readings, categories, commitments, transactions and queued changes. Budget data is cleared from the Kinsen API; assets, liabilities and PLN Token Tracker readings are stored only on this device and are cleared here. Other devices clear their local budget copies the next time they connect. This reset requires an internet connection. Your Clerk sign-in stays active.</p>
@@ -96,20 +99,20 @@ export function AccountSettingsPage() {
                 {resetHint}
               </p>
             )}
-          </div>
+          </Stack>
           <Button label="Reset all data" variant="destructive" className="button button-danger" onClick={() => openAction('reset')} isDisabled={resetUnavailable} aria-describedby={resetUnavailable ? 'reset-account-hint' : undefined} />
         </section>
 
         <section className="account-setting-card account-setting-card-danger" aria-labelledby="deactivate-account-title">
-          <div>
+          <Stack as="div" style={{ display: 'block' }} gap={0}>
             <p className="eyebrow">SIGN-IN ACCESS</p>
             <h2 id="deactivate-account-title">Deactivate account</h2>
             <p>This disables your Clerk account so it can no longer sign in. Kinsen keeps your data; reset it separately if you want it erased. A Kinsen administrator must reactivate a deactivated account.</p>
             {syncStatus !== 'SYNCED' && <p className="account-setting-hint">Sync your latest changes before deactivating. Current sync status: {syncStatus.toLowerCase()}.</p>}
-          </div>
+          </Stack>
           <Button label="Deactivate account" variant="destructive" className="button button-danger" onClick={() => openAction('deactivate')} isDisabled={syncStatus !== 'SYNCED'} />
         </section>
-      </div>
+      </Stack>
 
       <FormDialog
         open={action !== null}
@@ -127,7 +130,7 @@ export function AccountSettingsPage() {
           </p>
           <TextInput label={`Type ${phrase} to confirm`} value={confirmation} onChange={setConfirmation} autoComplete="off" />
           {error && <p className="form-error" role="alert">{error}</p>}
-          <div className="form-actions">
+          <Stack as="div" className="form-actions">
             <Button label="Cancel" variant="ghost" className="button button-outline" onClick={closeAction} isDisabled={busy} />
             <Button
               label={busy ? 'Working…' : isReset ? 'Reset all data' : 'Deactivate account'}
@@ -137,9 +140,9 @@ export function AccountSettingsPage() {
               isDisabled={busy || confirmation !== phrase}
               isLoading={busy}
             />
-          </div>
+          </Stack>
         </form>
       </FormDialog>
-    </div>
+    </Stack>
   )
 }

@@ -18,6 +18,7 @@
     "@clerk/react": "^6.17.5",
     "@hookform/resolvers": "^5.2.2",
     "@kinsen/budget-domain": "workspace:*",
+    "@kinsen/mcp-contract": "workspace:*",
     "@stylexjs/stylex": "^0.19.1",
     "dexie": "^4.2.1",
     "lucide-react": "^1.52.0",

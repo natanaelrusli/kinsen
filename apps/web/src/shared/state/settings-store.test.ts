@@ -19,6 +19,7 @@ describe('settings preference loading', () => {
   beforeEach(() => window.localStorage.clear())
   afterEach(() => {
     window.localStorage.clear()
+    vi.restoreAllMocks()
     vi.resetModules()
   })
 
@@ -32,6 +33,25 @@ describe('settings preference loading', () => {
       expect(reloaded.defaults.surfaceStyle).toBe(defaults.surfaceStyle)
     }
   })
+  it('keeps preferences usable after a storage write fails and recovers on a later save', async () => {
+    const { store } = await reloadFromStorage()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('private storage exception')
+    })
+
+    store.getState().setSurfaceStyle('sand')
+    expect(store.getState().surfaceStyle).toBe('sand')
+    expect(store.getState().persistenceStatus).toBe('error')
+
+    store.getState().setHeadingStyle('modern')
+    expect(store.getState().persistenceStatus).toBe('saved')
+    expect(JSON.parse(window.localStorage.getItem(storageKey) ?? 'null')).toMatchObject({
+      surfaceStyle: 'sand',
+      headingStyle: 'modern',
+    })
+    setItem.mockRestore()
+  })
+
 
   it('round-trips every typography pairing through storage', async () => {
     for (const style of ['editorial', 'modern', 'grotesk', 'humanist', 'rounded', 'ledger'] as const) {

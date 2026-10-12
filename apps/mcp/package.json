@@ -1,0 +1,27 @@
+{
+  "name": "@kinsen/mcp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env.local --import tsx src/index.ts",
+    "prebuild": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/mcp-contract build",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kinsen/mcp-contract": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "ws": "^8.18.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

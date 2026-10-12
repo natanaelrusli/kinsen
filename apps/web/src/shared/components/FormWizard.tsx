@@ -65,11 +65,15 @@ export function FormWizard({
         (name.startsWith(fieldName) && (name[fieldName.length] === '.' || name[fieldName.length] === '[')),
       )
     })
-    const invalidField = namedFields.find((element) => element.getAttribute('aria-invalid') === 'true')
-    const namedField = invalidField ?? namedFields[0]
-    const target = namedField instanceof HTMLInputElement && namedField.type === 'hidden'
+    // Astryx's native DateInput intentionally has no form name; its validity
+    // state is exposed on the input itself. Selector carries its field name on
+    // a hidden input and exposes validity/focus on its visible combobox trigger.
+    const invalidVisibleField = form.querySelector<HTMLElement>('[aria-invalid="true"]')
+    const invalidNamedField = namedFields.find((element) => element.getAttribute('aria-invalid') === 'true')
+    const namedField = invalidNamedField ?? namedFields[0]
+    const target = invalidVisibleField ?? (namedField instanceof HTMLInputElement && namedField.type === 'hidden'
       ? namedField.parentElement?.querySelector<HTMLElement>('button:not(:disabled), [role="combobox"]:not([aria-disabled="true"])')
-      : namedField
+      : namedField)
     if (target && !target.matches(':disabled, [aria-disabled="true"]')) {
       target.focus()
       return
@@ -94,7 +98,6 @@ export function FormWizard({
     body.scrollTop = 0
     body.focus()
   }, [currentIndex, open])
-
 
   async function validateActiveStep() {
     if (validationInFlight.current) return false
@@ -140,7 +143,6 @@ export function FormWizard({
         onStepClick={(index) => {
           if (!validationInFlight.current && index < currentIndex) setActiveStep(index)
         }}
-        horizontalOptions={{ minimumStepWidth: 112, collapsedVariant: 'withLabel' }}
         className="form-wizard-stepper"
       >
         {steps.map((step, index) => (
@@ -211,7 +213,7 @@ export function FormWizardDialog({ open, title, description, onClose, ...wizard 
   }
 
   return (
-    <Dialog isOpen={open} onOpenChange={handleOpenChange} purpose="form" width={560} maxHeight="90dvh">
+    <Dialog isOpen={open} onOpenChange={handleOpenChange} purpose="form">
       <DialogHeader title={title} subtitle={description} onOpenChange={handleOpenChange} />
       <FormWizard {...wizard} open={open} onCancel={onClose} />
     </Dialog>

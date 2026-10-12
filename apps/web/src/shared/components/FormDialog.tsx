@@ -74,8 +74,6 @@ export function FormDialog({ open, title, description, onClose, children }: Form
       onOpenChange={handleOpenChange}
       onAnimationEnd={handleAnimationEnd}
       purpose="form"
-      width={560}
-      maxHeight="90dvh"
     >
       <DialogHeader title={title} subtitle={description} onOpenChange={handleOpenChange} />
       {children}

@@ -76,6 +76,15 @@ describe('BalanceChart', () => {
     expect(labels[0]).toBe('1 Oct 2026')
     expect(labels[labels.length - 1]).toBe('9 Oct 2026')
   })
+  it('describes net balance change without presenting it as consumption', () => {
+    const { container } = render(<BalanceChart observations={history} />)
+    const summary = container.querySelector('.electricity-chart-summary')
+
+    expect(summary).toHaveTextContent('Net balance change: -66,66 kWh')
+    expect(summary).toHaveTextContent('includes recorded refill credit')
+    expect(summary).not.toHaveTextContent('kWh used')
+  })
+
 
   it('renders a single reading without dividing by a zero span', () => {
     const { container } = render(<BalanceChart observations={[history[0]!]} />)

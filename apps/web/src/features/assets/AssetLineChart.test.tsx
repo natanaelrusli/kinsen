@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AssetLineChart } from './AssetLineChart'
 
@@ -42,6 +42,20 @@ describe('AssetLineChart date geometry', () => {
     expect(secondX).toBe(lastX)
     expect(container.querySelectorAll('.asset-chart-point')).toHaveLength(2)
   })
+  it('exposes every dated value, including intermediate observations, in an expandable table', () => {
+    render(<AssetLineChart points={[
+      { date: '2026-01-01', value: 10 },
+      { date: '2026-01-02', value: 20 },
+      { date: '2026-02-01', value: 30 },
+    ]} />)
+
+    fireEvent.click(screen.getByText('View all 3 dated values'))
+    expect(screen.getByRole('table', { name: 'Asset value history dated values' })).toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /2 January 2026.*20/ })).toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /1 January 2026.*10/ })).toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /1 February 2026.*30/ })).toBeInTheDocument()
+  })
+
 
   it('centers a one-point history and produces finite geometry', () => {
     render(<AssetLineChart points={[{ date: '2026-05-14', value: 50 }]} />)

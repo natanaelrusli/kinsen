@@ -11,9 +11,8 @@ import { StatusDot } from '@astryxdesign/core/StatusDot'
 import { Text } from '@astryxdesign/core/Text'
 import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav'
 import { createStaticSource } from '@astryxdesign/core/Typeahead'
-import { TreeList, type TreeListItemData } from '@astryxdesign/core/TreeList'
 import { UserButton, useAuth } from '@clerk/react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { matchPath, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { useBudgetStore } from '../state/budget-store'
 import { useAssetStore } from '../state/asset-store'
@@ -30,8 +29,6 @@ type Destination = {
   label: string
   icon: IconName
   keywords: string[]
-  /** Budget and account pages live in the Settings menu instead of the sidebar. */
-  inSidebar?: boolean
 }
 
 const destinations: Destination[] = [
@@ -41,12 +38,10 @@ const destinations: Destination[] = [
   { id: 'activity', to: '/activity', label: 'Activity', icon: 'activity', keywords: ['transactions', 'spending'] },
   { id: 'assets', to: '/assets', label: 'Assets', icon: 'assets', keywords: ['accounts', 'net worth'] },
   { id: 'electricity', to: '/electricity', label: 'PLN Token Tracker', icon: 'electricity', keywords: ['pln', 'token', 'electricity', 'meter', 'kwh'] },
-  { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories'], inSidebar: false },
+  { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories']},
   { id: 'settings', to: '/settings', label: 'Settings', icon: 'settings', keywords: ['preferences', 'appearance'] },
-  { id: 'account', to: '/account', label: 'Account settings', icon: 'wallet', keywords: ['profile', 'account'], inSidebar: false },
+  { id: 'account', to: '/account', label: 'Account settings', icon: 'wallet', keywords: ['profile', 'account'] },
 ]
-
-const sidebarDestinations = destinations.filter((destination) => destination.inSidebar !== false)
 
 const destinationsById = new Map(destinations.map((destination) => [destination.id, destination]))
 
@@ -100,85 +95,157 @@ function routeMatches(pathname: string, to: string, end = false): boolean {
   return matchPath({ path: to, end }, pathname) !== null
 }
 
-function createRouteTreeItem(destination: Destination, pathname: string): TreeListItemData {
-  return {
-    id: destination.id,
-    label: destination.label,
-    href: destination.to,
-    startContent: <Icon name={destination.icon} size={18} />,
-    isSelected: routeMatches(pathname, destination.to, destination.to === '/'),
-  }
+type SidebarSection = {
+  id: string
+  title: string
+  subtitle: string
+  icon: IconName
+  destinationIds: string[]
 }
 
-function createNavigationTree(pathname: string): TreeListItemData[] {
-  const item = (id: string) => {
-    const destination = destinationsById.get(id)
-    if (!destination) throw new Error(`Unknown shell navigation destination: ${id}`)
-    return createRouteTreeItem(destination, pathname)
-  }
+/**
+ * Two-level navigation. The rail on the left is always collapsed and switches
+ * sections; the pane beside it lists that section's destinations. Rows stay one
+ * level deep: a section is a label plus sibling links, never a collapsible
+ * parent with nested children.
+ */
+const sidebarSections: [SidebarSection, ...SidebarSection[]] = [
+  { id: 'overview', title: 'Overview', subtitle: 'Daily plan and review', icon: 'overview', destinationIds: ['overview', 'calendar', 'commitments', 'activity'] },
+  { id: 'portfolio', title: 'Portfolio', subtitle: 'Accounts and token tracking', icon: 'assets', destinationIds: ['assets', 'electricity'] },
+  { id: 'manage', title: 'Manage', subtitle: 'Preferences and settings', icon: 'settings', destinationIds: ['settings'] },
+]
 
-  return [
-    item('overview'),
-    {
-      id: 'planning',
-      label: 'Planning',
-      startContent: <Icon name="calendar" size={18} />,
-      isExpanded: true,
-      children: [item('calendar'), item('commitments')],
-    },
-    item('activity'),
-    item('assets'),
-    item('electricity'),
-    {
-      id: 'manage',
-      label: 'Manage',
-      startContent: <Icon name="settings" size={18} />,
-      isExpanded: true,
-      children: [item('settings')],
-    },
-  ]
+function sidebarSectionDestinations(section: SidebarSection): Destination[] {
+  return section.destinationIds.map((destinationId) => {
+    const destination = destinationsById.get(destinationId)
+    if (!destination) throw new Error(`Unknown shell navigation destination: ${destinationId}`)
+    return destination
+  })
 }
 
-export function AppSidebar() {
-  const location = useLocation()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const navigationTree = useMemo(
-    () => createNavigationTree(location.pathname),
-    [location.pathname],
+/** The section that owns the current route, or undefined when nothing matches. */
+function sidebarSectionForPathname(pathname: string): SidebarSection | undefined {
+  return sidebarSections.find((section) =>
+    sidebarSectionDestinations(section).some((destination) =>
+      routeMatches(pathname, destination.to, destination.to === '/'),
+    ),
   )
+}
+
+function AppNavRail({
+  activeSectionId,
+  onSelect,
+}: {
+  activeSectionId: string
+  onSelect: (sectionId: string) => void
+}) {
+  return (
+    <Stack as="nav" className="app-nav-rail" gap={2} aria-label="Sections">
+      {sidebarSections.map((section) => {
+        const isActive = section.id === activeSectionId
+        return (
+          <button
+            key={section.id}
+            type="button"
+            className="app-nav-rail-item"
+            aria-current={isActive ? 'true' : undefined}
+            data-active={isActive ? 'true' : undefined}
+            onClick={() => onSelect(section.id)}>
+            <Stack direction="vertical" hAlign="center" gap={1} className="app-nav-rail-item-content">
+              <Icon name={section.icon} size={18} aria-hidden="true" />
+              <Text type="supporting" className="app-nav-rail-label">{section.title}</Text>
+            </Stack>
+          </button>
+        )
+      })}
+    </Stack>
+  )
+}
+
+const paneCollapsedStorageKey = 'kinsen-shell-nav-pane-collapsed'
+
+/**
+ * Collapse state is owned here, so the pane can restyle itself and drop its
+ * heading while collapsed; Astryx persists the pane width under `autoSaveId`.
+ */
+function readPaneCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(paneCollapsedStorageKey) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function savePaneCollapsed(isCollapsed: boolean) {
+  try {
+    window.localStorage.setItem(paneCollapsedStorageKey, String(isCollapsed))
+  } catch {
+    // Storage can be unavailable (private mode, quota): collapse stays session-only.
+  }
+}
+
+function AppSidebarPane({ section }: { section: SidebarSection }) {
+  const location = useLocation()
+  const [paneCollapsed, setPaneCollapsed] = useState(readPaneCollapsed)
+
+  function handleCollapseChange(nextCollapsed: boolean) {
+    setPaneCollapsed(nextCollapsed)
+    savePaneCollapsed(nextCollapsed)
+  }
 
   return (
     <SideNav
       aria-label="Primary navigation"
       className="app-side-nav"
-      data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      data-sidebar-collapsed={paneCollapsed ? 'true' : 'false'}
       resizable={{
-        defaultWidth: 256,
-        minWidth: 180,
+        defaultWidth: 260,
+        minWidth: 200,
         maxWidth: 400,
-        isCollapsed: sidebarCollapsed,
-        onCollapseChange: setSidebarCollapsed,
-      }}>
-      {sidebarCollapsed ? (
-        <SideNavSection className="app-side-nav-section" title="Your money">
-          {sidebarDestinations.map((destination) => (
-            <SideNavItem
-              key={destination.id}
-              href={destination.to}
-              label={destination.label}
-              icon={<Icon name={destination.icon} size={19} />}
-              isSelected={routeMatches(location.pathname, destination.to, destination.to === '/')}
-            />
-          ))}
-        </SideNavSection>
-      ) : (
-        <TreeList
-          items={navigationTree}
-          density="compact"
-          header={<span className="app-nav-section-label">Your money</span>}
-        />
-      )}
+        autoSaveId: 'kinsen-shell-nav-pane',
+        isCollapsed: paneCollapsed,
+        onCollapseChange: handleCollapseChange,
+      }}
+      topContent={paneCollapsed ? undefined : (
+        <Stack gap={0} className="app-side-nav-heading">
+          <Text type="large" weight="semibold" display="block">{section.title}</Text>
+          <Text type="supporting" display="block">{section.subtitle}</Text>
+        </Stack>
+      )}>
+      <SideNavSection className="app-side-nav-section" title={section.title} isHeaderHidden>
+        {sidebarSectionDestinations(section).map((destination) => (
+          <SideNavItem
+            key={destination.id}
+            href={destination.to}
+            label={destination.label}
+            icon={<Icon name={destination.icon} size={19} />}
+            isSelected={routeMatches(location.pathname, destination.to, destination.to === '/')}
+          />
+        ))}
+      </SideNavSection>
     </SideNav>
+  )
+}
+
+export function AppSidebar() {
+  const location = useLocation()
+  const routedSectionId = sidebarSectionForPathname(location.pathname)?.id
+  const [activeSectionId, setActiveSectionId] = useState(routedSectionId ?? sidebarSections[0].id)
+  const activeSection = sidebarSections.find((section) => section.id === activeSectionId) ?? sidebarSections[0]
+
+  // The route owns the pane: any route change re-derives it, so a rail click only
+  // moves the pane until the next navigation. Keyed on the pathname, not on the
+  // derived id, so returning to an earlier section still pulls the pane back.
+  useEffect(() => {
+    if (routedSectionId) setActiveSectionId(routedSectionId)
+  }, [location.pathname, routedSectionId])
+
+  return (
+    <Stack direction="horizontal" gap={0} className="app-nav-split">
+      <AppNavRail activeSectionId={activeSection.id} onSelect={setActiveSectionId} />
+      <AppSidebarPane section={activeSection} />
+    </Stack>
   )
 }
 
@@ -299,6 +366,31 @@ export function AppShellChrome({
   const displayedSyncSummary = electricityLocalOnly ? 'Local only' : syncSummary(syncStatus, online)
   const displayedSyncVariant = electricityLocalOnly ? 'neutral' : hasSyncProblem ? 'error' : !online || syncStatus === 'PENDING' || syncStatus === 'SYNCING' ? 'warning' : 'success'
   const previousPathname = useRef(pathname)
+  const appShellRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const shell = appShellRef.current
+    if (!shell) return
+
+    // Astryx places its resize separator beside SideNav's <nav>; name their shared panel
+    // without enclosing the shell's top-level banner or main landmark.
+    const nameSidebarPanel = () => {
+      const panel = shell.querySelector<HTMLElement>('.astryx-app-shell-sidenav')
+      if (!panel) return
+
+      if (!panel.hasAttribute('role')) panel.setAttribute('role', 'complementary')
+      const role = panel.getAttribute('role')
+      if ((role === 'complementary' || role === 'region') && !panel.hasAttribute('aria-label')) {
+        panel.setAttribute('aria-label', 'Workspace navigation')
+      }
+    }
+
+    nameSidebarPanel()
+    const observer = new MutationObserver(nameSidebarPanel)
+    observer.observe(shell, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
+
 
   useEffect(() => {
     if (previousPathname.current === pathname) return
@@ -323,64 +415,65 @@ export function AppShellChrome({
 
   return (
     <>
-      <Stack as="section" className="app-workspace" gap={0}>
-      <AstryxAppShell
-        className={`app-frame${layoutDensity === 'compact' ? ' is-compact' : ''}${playfulMotion ? '' : ' is-motion-reduced'}`}
-        data-backdrop={backdropStyle === 'plain' ? undefined : backdropStyle}
-        height="fill"
-        variant="elevated"
-        contentPadding={0}
-        mobileNav={{ hasToggle: false, breakpoint: 'lg' }}
-        banner={error && <Stack direction="horizontal" gap={3} className="global-error" role="alert"><Icon name="warning" size={18} /><span>{error}</span><Button label="Retry" variant="secondary" type="button" onClick={onRetry} /></Stack>}
-        topNav={
-          <TopNav
-            label="Application top bar"
-            className="app-top-nav"
-            heading={<TopNavHeading heading="kinsen." headingHref="/" logo={<span className="brand-mark" aria-hidden="true"><span>K</span><i /></span>} />}
-            startContent={<Text type="label" className="topbar-page-title">{currentPage}</Text>}
-            endContent={
-              <Stack direction="horizontal" gap={2} vAlign="center" className="app-topbar-controls">
-                <Stack direction="horizontal" gap={2} vAlign="center" className="topbar-status" role="status" aria-live="polite">
-                  <StatusDot label={displayedSyncLabel} variant={displayedSyncVariant} />
-                  <Text type="supporting" className="topbar-status-copy" aria-hidden="true">{displayedSyncSummary}</Text>
+      <Stack className="app-workspace" gap={0}>
+        <AstryxAppShell
+          ref={appShellRef}
+          className={`app-frame${layoutDensity === 'compact' ? ' is-compact' : ''}${playfulMotion ? '' : ' is-motion-reduced'}`}
+          data-backdrop={backdropStyle === 'plain' ? undefined : backdropStyle}
+          height="fill"
+          variant="elevated"
+          contentPadding={0}
+          mobileNav={{ hasToggle: false, breakpoint: 'lg' }}
+          banner={error && <Stack direction="horizontal" gap={3} className="global-error" role="alert"><Icon name="warning" size={18} /><span>{error}</span><Button label="Retry" variant="secondary" type="button" onClick={onRetry} /></Stack>}
+          topNav={
+            <TopNav
+              label="Application top bar"
+              className="app-top-nav"
+              heading={<TopNavHeading heading="kinsen." headingHref="/" logo={<span className="brand-mark" aria-hidden="true"><span>K</span><i /></span>} />}
+              startContent={<Text type="label" className="topbar-page-title">{currentPage}</Text>}
+              endContent={
+                <Stack direction="horizontal" gap={2} vAlign="center" className="app-topbar-controls">
+                  <Stack direction="horizontal" gap={2} vAlign="center" className="topbar-status" role="status" aria-live="polite">
+                    <StatusDot label={displayedSyncLabel} variant={displayedSyncVariant} />
+                    <Text type="supporting" className="topbar-status-copy" aria-hidden="true">{displayedSyncSummary}</Text>
+                  </Stack>
+                  <Stack direction="horizontal" vAlign="center" className="app-command-search">
+                    <Button
+                      className="app-command-search-desktop"
+                      label="Search pages and commands"
+                      size="sm"
+                      variant="ghost"
+                      icon={<SearchGlyph />}
+                      endContent={<Kbd keys="mod+k" />}
+                      onClick={openCommandPalette}>
+                      Search
+                    </Button>
+                    <IconButton
+                      className="app-command-search-mobile"
+                      label="Search pages and commands"
+                      tooltip="Search pages and commands"
+                      variant="ghost"
+                      icon={<SearchGlyph />}
+                      onClick={openCommandPalette}
+                    />
+                  </Stack>
+                  <DropdownMenu
+                    button={{ label: 'Appearance', tooltip: `Appearance: ${colorMode}`, variant: 'ghost', size: 'md', isIconOnly: true, icon: <AppearanceGlyph />, className: 'topbar-appearance' }}
+                    hasChevron={false}
+                    menuWidth="max-content"
+                    alignment="end">
+                    <DropdownMenuRadioGroup label="Color mode" value={colorMode} onChange={(value) => setColorMode(value as ColorMode)}>
+                      {colorModeOptions.map((option) => <DropdownMenuRadioItem key={option.value} value={option.value} label={option.label} />)}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenu>
+                  <Stack direction="horizontal" vAlign="center" className="topbar-account">{accountControl}</Stack>
                 </Stack>
-                <Stack direction="horizontal" vAlign="center" className="app-command-search">
-                  <Button
-                    className="app-command-search-desktop"
-                    label="Search pages and commands"
-                    size="sm"
-                    variant="ghost"
-                    icon={<SearchGlyph />}
-                    endContent={<Kbd keys="mod+k" />}
-                    onClick={openCommandPalette}>
-                    Search
-                  </Button>
-                  <IconButton
-                    className="app-command-search-mobile"
-                    label="Search pages and commands"
-                    tooltip="Search pages and commands"
-                    variant="ghost"
-                    icon={<SearchGlyph />}
-                    onClick={openCommandPalette}
-                  />
-                </Stack>
-                <DropdownMenu
-                  button={{ label: 'Appearance', tooltip: `Appearance: ${colorMode}`, variant: 'ghost', size: 'md', isIconOnly: true, icon: <AppearanceGlyph />, className: 'topbar-appearance' }}
-                  hasChevron={false}
-                  menuWidth="max-content"
-                  alignment="end">
-                  <DropdownMenuRadioGroup label="Color mode" value={colorMode} onChange={(value) => setColorMode(value as ColorMode)}>
-                    {colorModeOptions.map((option) => <DropdownMenuRadioItem key={option.value} value={option.value} label={option.label} />)}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenu>
-                <Stack direction="horizontal" vAlign="center" className="topbar-account">{accountControl}</Stack>
-              </Stack>
-            }
-          />
-        }
-        sideNav={<AppSidebar />}>
-        {children}
-      </AstryxAppShell>
+              }
+            />
+          }
+          sideNav={<AppSidebar />}>
+          {children}
+        </AstryxAppShell>
         <MobileNavigation />
       </Stack>
       <Celebration />

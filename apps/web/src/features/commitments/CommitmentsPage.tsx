@@ -1,3 +1,4 @@
+import { Stack } from '@astryxdesign/core/Stack'
 import { Button } from '@astryxdesign/core/Button'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { useState } from 'react'
@@ -40,22 +41,22 @@ export function CommitmentsPage() {
   }
 
   return (
-    <div>
+    <Stack as="div" gap={0}>
       <PageHeader eyebrow="LOOKING AHEAD" title="Commitments" description="Bills, planned purchases, and recurring expenses — before they leave your account." actions={<Button label="New commitment" className="button button-primary" variant="primary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={18} />}></Button>} />
-      <div className="stat-grid three-stats">
+      <Stack as="div" className="stat-grid three-stats">
         <article className="stat-card"><span className="stat-label">Outstanding commitments</span><strong>{formatIdr(overview.outstandingCommitments)}</strong><span className="stat-detail">Still reserved from this period</span></article>
         <article className={`stat-card${overdueCount ? ' stat-card-warning' : ''}`}><span className="stat-label">Past due</span><strong>{overdueCount}</strong><span className="stat-detail">Unpaid commitments stay visible</span></article>
         <article className="stat-card"><span className="stat-label">Fulfilled so far</span><strong>{formatIdr(paidThisPeriod)}</strong><span className="stat-detail">Actual payments linked to plans</span></article>
-      </div>
+      </Stack>
       {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
       <section className="section-block commitments-section">
-        <div className="section-heading"><div><p className="eyebrow">THIS BUDGET PERIOD</p><h2>Planned expenses</h2></div><span className="count-pill">{overview.occurrences.length} occurrences</span></div>
-        {overview.occurrences.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="commitments" size={23} /></span>} title="Nothing planned yet" description="Add a bill or future purchase so Kinsen can reserve only what is still unpaid." actions={<Button label="Plan a commitment" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={17} />}></Button>} /> : <div className="commitment-list">
+        <Stack as="div" direction="horizontal" className="section-heading"><Stack as="div" style={{ display: 'block' }}><p className="eyebrow">THIS BUDGET PERIOD</p><h2>Planned expenses</h2></Stack><span className="count-pill">{overview.occurrences.length} occurrences</span></Stack>
+        {overview.occurrences.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="commitments" size={23} /></span>} title="Nothing planned yet" description="Add a bill or future purchase so Kinsen can reserve only what is still unpaid." actions={<Button label="Plan a commitment" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={17} />}></Button>} /> : <Stack as="ul" className="commitment-list">
           {overview.occurrences.map((occurrence) => {
             const expense = snapshot.plannedExpenses.find((item) => item.id === occurrence.plannedExpenseId) ?? null
-            return <CommitmentCard key={occurrence.id} occurrence={occurrence} today={overview.today} categoryName={snapshot.categories.find((category) => category.id === occurrence.categoryId)?.name ?? 'Category'} onFulfill={setPayingOccurrence} onEdit={() => { setEditing(expense); setFormOpen(true) }} onDelete={() => setConfirmingExpense(expense)} />
+            return <li key={occurrence.id}><CommitmentCard occurrence={occurrence} today={overview.today} categoryName={snapshot.categories.find((category) => category.id === occurrence.categoryId)?.name ?? 'Category'} onFulfill={setPayingOccurrence} onEdit={() => { setEditing(expense); setFormOpen(true) }} onDelete={() => setConfirmingExpense(expense)} /></li>
           })}
-        </div>}
+        </Stack>}
       </section>
       <PlannedExpenseForm open={formOpen} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
       <TransactionForm open={Boolean(payingOccurrence)} linkedOccurrence={payingOccurrence ? { plannedExpenseId: payingOccurrence.plannedExpenseId, dueDate: payingOccurrence.dueDate } : null} onClose={() => setPayingOccurrence(null)} />
@@ -74,6 +75,6 @@ export function CommitmentsPage() {
           void deleteExpense(expense)
         }}
       />
-    </div>
+    </Stack>
   )
 }

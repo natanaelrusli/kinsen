@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { AppShell } from './shared/components/AppShell'
 import { RouteSkeleton } from './shared/components/RouteSkeleton'
+import { disconnectMcpBridge } from './infrastructure/mcp/browser-bridge'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
 const CalendarPage = lazy(() => import('./features/calendar/CalendarPage').then(({ CalendarPage }) => ({ default: CalendarPage })))
@@ -133,6 +134,9 @@ function RouteContent() {
 
 
 function BudgetApplication() {
+  const { userId } = useAuth()
+  useEffect(() => disconnectMcpBridge, [userId])
+
   return (
     <BrowserRouter>
       <Routes>

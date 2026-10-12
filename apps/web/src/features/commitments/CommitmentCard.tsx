@@ -1,3 +1,4 @@
+import { Stack } from '@astryxdesign/core/Stack'
 import { Button } from '@astryxdesign/core/Button'
 import { ProgressBar } from '@astryxdesign/core/ProgressBar'
 import type { CSSProperties } from 'react'
@@ -23,16 +24,33 @@ export function CommitmentCard({ occurrence, today, categoryName, onFulfill, onE
   const progress = occurrence.amount === 0 ? 0 : occurrence.fulfilledAmount / occurrence.amount * 100
   return (
     <article className={`commitment-card${overdue ? ' is-overdue' : ''}${complete ? ' is-complete' : ''}`}>
-      <div className="commitment-card-main">
-        <div className="commitment-card-title"><span className={`commitment-state-icon${complete ? ' done' : overdue ? ' warning' : ''}`}><Icon name={complete ? 'check' : overdue ? 'warning' : 'clock'} size={16} /></span><div><h3>{occurrence.name}</h3><p>{categoryName} <i aria-hidden="true">·</i> {occurrence.cadence ? `${occurrence.cadence.toLowerCase()} repeat` : 'One-time'}</p></div></div>
-        <div className="commitment-card-due"><span>{overdue ? 'Was due' : 'Due'} {formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })}</span><strong>{formatIdr(occurrence.amount)}</strong></div>
-      </div>
-      <div className="commitment-progress-row"><ProgressBar className="app-progress-bar" value={progress} label={`${occurrence.name} fulfillment`} style={{'--color-accent': complete ? 'var(--green)' : overdue ? 'var(--rust)' : 'var(--lime-dark)'} as CSSProperties} isLabelHidden /><span>{status}</span></div>
-      <div className="commitment-card-bottom"><span>{occurrence.fulfilledAmount > 0 ? `${formatIdr(occurrence.fulfilledAmount)} paid · ${formatIdr(occurrence.outstandingAmount)} left` : `${formatIdr(occurrence.outstandingAmount)} outstanding`}</span><div className="row-actions">
-        {!complete && <Button label={partial ? 'Add payment' : 'Record payment'} className="button button-small button-secondary" variant="secondary" type="button" onClick={() => onFulfill(occurrence)} />}
-        <Button label={`Edit ${occurrence.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${occurrence.name}`} onClick={onEdit} icon={<Icon name="edit" size={17} />} isIconOnly />
-        <Button label={`Delete ${occurrence.name}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${occurrence.name}`} onClick={onDelete} icon={<Icon name="trash" size={17} />} isIconOnly />
-      </div></div>
+      <Stack as="div" direction="horizontal" className="commitment-card-main" gap={3}>
+        <Stack as="div" direction="horizontal" className="commitment-card-title" gap={2}>
+          <span className={`commitment-state-icon${complete ? ' done' : overdue ? ' warning' : ''}`}>
+            <Icon name={complete ? 'check' : overdue ? 'warning' : 'clock'} size={16} />
+          </span>
+          <Stack as="div" style={{ display: 'block' }} gap={0}>
+            <h3>{occurrence.name}</h3>
+            <p>{categoryName} <i aria-hidden="true">·</i> {occurrence.cadence ? `${occurrence.cadence.toLowerCase()} repeat` : 'One-time'}</p>
+          </Stack>
+        </Stack>
+        <Stack as="div" className="commitment-card-due">
+          <span>{overdue ? 'Was due' : 'Due'} {formatDate(occurrence.dueDate, { day: 'numeric', month: 'short' })}</span>
+          <strong>{formatIdr(occurrence.amount)}</strong>
+        </Stack>
+      </Stack>
+      <Stack as="div" direction="horizontal" className="commitment-progress-row" gap={2}>
+        <ProgressBar className="app-progress-bar" value={progress} label={`${occurrence.name} fulfillment`} style={{ '--color-accent': complete ? 'var(--green)' : overdue ? 'var(--rust)' : 'var(--lime-dark)' } as CSSProperties} isLabelHidden />
+        <span>{status}</span>
+      </Stack>
+      <Stack as="div" direction="horizontal" className="commitment-card-bottom" gap={2}>
+        <span>{occurrence.fulfilledAmount > 0 ? `${formatIdr(occurrence.fulfilledAmount)} paid · ${formatIdr(occurrence.outstandingAmount)} left` : `${formatIdr(occurrence.outstandingAmount)} outstanding`}</span>
+        <Stack as="div" direction="horizontal" className="row-actions" gap={1}>
+          {!complete && <Button label={partial ? 'Add payment' : 'Record payment'} className="button button-small button-secondary" variant="secondary" type="button" onClick={() => onFulfill(occurrence)} />}
+          <Button label={`Edit ${occurrence.name}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${occurrence.name}`} onClick={onEdit} icon={<Icon name="edit" size={17} />} isIconOnly />
+          <Button label={`Delete ${occurrence.name}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${occurrence.name}`} onClick={onDelete} icon={<Icon name="trash" size={17} />} isIconOnly />
+        </Stack>
+      </Stack>
     </article>
   )
 }

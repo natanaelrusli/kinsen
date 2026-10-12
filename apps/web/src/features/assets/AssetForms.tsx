@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, type FieldPath } from 'react-hook-form'
 import { z } from 'zod'
@@ -8,7 +8,6 @@ import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { localToday } from '../../shared/format/date'
 import { newId } from '../../shared/format/id'
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput'
-import { Grid } from '@astryxdesign/core/Grid'
 import { Selector } from '@astryxdesign/core/Selector'
 import {
   CurrencyAmountField,
@@ -193,7 +192,7 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
           fields: ['name', 'type', 'purpose', 'institution', 'nativeCurrency'],
           content: <>
             <AstryxTextField control={control} name="name" label="Name" autoComplete="off" maxLength={100} className="field" />
-            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+            <Stack direction="vertical" gap={3}>
               <AstryxSelectField
                 control={control}
                 name="type"
@@ -223,8 +222,8 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
                   { value: 'OTHER', label: 'Other' },
                 ]}
               />
-            </Grid>
-            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+            </Stack>
+            <Stack direction="vertical" gap={3}>
               <AstryxTextField control={control} name="institution" label="Bank / institution / place" autoComplete="off" maxLength={100} className="field" />
               <AstryxSelectField
                 control={control}
@@ -236,7 +235,7 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
                 onValueChange={(value) => setValue('exchangeRate', value === 'IDR' ? '1' : '')}
                 description="Cash-like ledger accounts use IDR. Use Foreign currency for manually converted FX holdings."
               />
-            </Grid>
+            </Stack>
             {assetType === 'GOLD' && <AstryxSelectField control={control} name="pricingMethod" label="Pricing method" options={[{ value: 'MANUAL', label: 'Manual value' }, ...(!initial || initial.nativeCurrency === 'IDR' ? [{ value: 'AUTOMATIC', label: 'Automatic gold price' }] : [])]} onValueChange={value => { if (value === 'AUTOMATIC') setValue('nativeCurrency', 'IDR') }} description={initial && initial.nativeCurrency !== 'IDR' ? 'Automatic pricing requires an IDR gold asset. This asset can still be valued manually.' : 'Automatic pricing uses the selected product’s retail purchase price.'} />}
           </>,
         },
@@ -257,14 +256,14 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
               {priceSource && <Button label="Retry gold prices" variant="secondary" isDisabled={catalogLoading} onClick={() => setRetry(value => value + 1)} />}
             </Stack>}
             {isInitial && !automatic && <>
-              <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+              <Stack direction="vertical" gap={3}>
                 <CurrencyAmountField control={control} name="openingAmount" label="Opening value (manual estimate)" autoComplete="off" inputMode="decimal" placeholder="0" prefix={currency} className="field" />
                 <AstryxDateField control={control} name="openingDate" label="Opening date" className="field" />
-              </Grid>
-              {!isLedger && currency !== 'IDR' && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+              </Stack>
+              {!isLedger && currency !== 'IDR' && <Stack direction="vertical" gap={3}>
                 <CurrencyAmountField control={control} name="exchangeRate" label={`IDR rate per ${currency}`} inputMode="decimal" placeholder="15000" description="Saved with this valuation; Kinsen does not refresh exchange rates." className="field" />
                 <AstryxDateField control={control} name="rateDate" label="Rate date" className="field" />
-              </Grid>}
+              </Stack>}
             </>}
             <AstryxTextAreaField control={control} name="notes" label="Notes" isOptional maxLength={1000} rows={3} className="field" />
             <SubmitError>{submitError}</SubmitError>
@@ -357,14 +356,14 @@ export function AssetActivityForm({ open, asset, initial, today = localToday(), 
         label: 'Activity',
         fields: ['kind', 'amount', 'date'],
         content: <>
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <Stack direction="vertical" gap={3}>
             <AstryxSelectField control={control} name="kind" label="Activity" className="field" options={[
               { value: 'CREDIT', label: 'Credit / deposit' },
               { value: 'DEBIT', label: 'Debit / withdrawal' },
               { value: 'CORRECTION', label: 'Correction' },
             ]} />
-            <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="decimal" placeholder="0" prefix="Rp" className="field" />
-          </Grid>
+            <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
+          </Stack>
           <AstryxDateField control={control} name="date" label="Date" className="field" />
         </>,
       },
@@ -428,7 +427,7 @@ export function AssetValuationForm({ open, asset, latest, selectableAssets, late
     setSubmitError(null)
     setConfirmOlder(false)
     reset({ nativeAmount: '', asOfDate: today, exchangeRate: selected.nativeCurrency === 'IDR' ? '1' : '', rateDate: today, quantity: '', unitPrice: '', note: '' })
-  }, [open, selectedAssetId, selectableAssets, today, reset])
+  }, [open, selectedAssetId, today, reset])
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null)
     if (older && !confirmOlder) return
@@ -471,23 +470,23 @@ export function AssetValuationForm({ open, asset, latest, selectableAssets, late
       {
         label: 'Value',
         fields: ['nativeAmount', 'asOfDate'],
-        content: <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+        content: <Stack direction="vertical" gap={3}>
           <CurrencyAmountField control={control} name="nativeAmount" label={`Native value (${currentAsset.nativeCurrency})`} inputMode="decimal" placeholder="0" className="field" />
           <AstryxDateField control={control} name="asOfDate" label="Valuation date" onValueChange={() => { setConfirmOlder(false); setSubmitError(null) }} className="field" />
-        </Grid>,
+        </Stack>,
       },
       {
         label: 'Details',
         fields: ['exchangeRate', 'rateDate', 'quantity', 'unitPrice'],
         content: <>
-          {currentAsset.nativeCurrency !== 'IDR' && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          {currentAsset.nativeCurrency !== 'IDR' && <Stack direction="vertical" gap={3}>
             <CurrencyAmountField control={control} name="exchangeRate" label={`IDR per ${currentAsset.nativeCurrency}`} inputMode="decimal" placeholder="Exchange rate" className="field" />
             <AstryxDateField control={control} name="rateDate" label="Rate date" className="field" />
-          </Grid>}
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          </Stack>}
+          <Stack direction="vertical" gap={3}>
             <AstryxTextField control={control} name="quantity" label="Quantity" isOptional inputMode="decimal" placeholder="Exact decimal" maxLength={40} className="field" />
             <CurrencyAmountField control={control} name="unitPrice" label="Unit price" isOptional inputMode="decimal" placeholder="Exact decimal" maxLength={40} className="field" />
-          </Grid>
+          </Stack>
           <p className="valuation-preview">Estimated IDR value <strong>{preview === null ? 'Enter a valid value and rate' : `Rp ${preview.toLocaleString('id-ID')}`}</strong></p>
         </>,
       },
@@ -560,13 +559,17 @@ export function TransferForm({ open, accounts, sourceAssetId, today = localToday
   type Values = z.infer<typeof transferSchema>
   const defaultSourceAssetId = sourceAssetId ?? accounts[0]?.id ?? ''
   const defaults: Values = { sourceAssetId: defaultSourceAssetId, destinationAssetId: accounts.find((asset) => asset.id !== defaultSourceAssetId)?.id ?? '', amount: '', date: today, note: '' }
-  const { control, handleSubmit, reset, trigger } = useForm<Values>({ resolver: zodResolver(transferSchema), defaultValues: defaults })
+  const { control, handleSubmit, reset, trigger, getValues } = useForm<Values>({ resolver: zodResolver(transferSchema), defaultValues: defaults })
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const accountSnapshot = useRef(accounts)
+  accountSnapshot.current = accounts
   useLayoutEffect(() => {
     if (!open) return
     setSubmitError(null)
-    reset({ ...defaults, date: today })
-  }, [open, sourceAssetId, accounts, today, reset])
+    const currentAccounts = accountSnapshot.current
+    const nextSourceId = sourceAssetId ?? currentAccounts[0]?.id ?? ''
+    reset({ sourceAssetId: nextSourceId, destinationAssetId: currentAccounts.find((asset) => asset.id !== nextSourceId)?.id ?? '', amount: '', date: today, note: '' })
+  }, [open, sourceAssetId, today, reset])
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null)
     try {
@@ -584,7 +587,11 @@ export function TransferForm({ open, accounts, sourceAssetId, today = localToday
         label: 'Accounts',
         fields: ['sourceAssetId', 'destinationAssetId'],
         content: <>
-          <AstryxSelectField control={control} name="sourceAssetId" label="From" className="field" options={accounts.map((asset) => ({ value: asset.id, label: `${asset.name} · ${asset.institution}` }))} />
+          <AstryxSelectField control={control} name="sourceAssetId" label="From" className="field" options={accounts.map((asset) => ({ value: asset.id, label: `${asset.name} · ${asset.institution}` }))} onValueChange={(value) => {
+            const destination = getValues('destinationAssetId')
+            reset({ sourceAssetId: value, destinationAssetId: destination !== value && accounts.some((account) => account.id === destination) ? destination : accounts.find((account) => account.id !== value)?.id ?? '', amount: '', date: today, note: '' })
+            setSubmitError(null)
+          }} />
           <AstryxSelectField control={control} name="destinationAssetId" label="To" className="field" options={accounts.map((asset) => ({ value: asset.id, label: `${asset.name} · ${asset.institution}` }))} />
         </>,
       },
@@ -592,10 +599,10 @@ export function TransferForm({ open, accounts, sourceAssetId, today = localToday
         label: 'Transfer details',
         fields: ['amount', 'date', 'note'],
         content: <>
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <Stack direction="vertical" gap={3}>
             <CurrencyAmountField control={control} name="amount" label="Amount" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="date" label="Date" className="field" />
-          </Grid>
+          </Stack>
           <AstryxTextField control={control} name="note" label="Note" isOptional maxLength={500} className="field" />
           <SubmitError>{submitError}</SubmitError>
         </>,
@@ -652,20 +659,20 @@ export function LiabilityForm({ open, initial, today = localToday(), saving, onC
         fields: ['name', 'type', 'institution'],
         content: <>
           <AstryxTextField control={control} name="name" label="Name" maxLength={100} className="field" />
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <Stack direction="vertical" gap={3}>
             <AstryxSelectField control={control} name="type" label="Type" className="field" options={LIABILITY_TYPES.map((type) => ({ value: type, label: liabilityTypeLabels[type] }))} />
             <AstryxTextField control={control} name="institution" label="Bank / provider" maxLength={100} className="field" />
-          </Grid>
+          </Stack>
         </>,
       },
       {
         label: initial ? 'Notes' : 'Opening balance',
         fields: initial ? ['notes'] : ['openingAmount', 'openingDate', 'notes'],
         content: <>
-          {!initial && <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          {!initial && <Stack direction="vertical" gap={3}>
             <CurrencyAmountField control={control} name="openingAmount" label="Opening balance (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="openingDate" label="As-of date" className="field" />
-          </Grid>}
+          </Stack>}
           <AstryxTextAreaField control={control} name="notes" label="Notes" isOptional maxLength={1000} rows={2} className="field" />
           <SubmitError>{submitError}</SubmitError>
         </>,
@@ -733,14 +740,14 @@ export function LiabilityActivityForm({ open, liability, initial, today = localT
         label: 'Change',
         fields: ['kind', 'amount', 'date'],
         content: <>
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <Stack direction="vertical" gap={3}>
             <AstryxSelectField control={control} name="kind" label="Change type" className="field" options={[
               { value: 'CHARGE', label: 'New charge' },
               { value: 'INTEREST_OR_FEE', label: 'Interest / fee' },
               { value: 'CORRECTION', label: 'Correction' },
             ]} />
             <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
-          </Grid>
+          </Stack>
           <AstryxDateField control={control} name="date" label="Date" className="field" />
         </>,
       },
@@ -792,11 +799,13 @@ export function LiabilityPaymentForm({ open, liability, accounts, assetBalances,
   const [submitError, setSubmitError] = useState<string | null>(null)
   const selectedAssetId = watch('assetId')
   const available = Math.min(maxLiabilityBalance, assetBalances[selectedAssetId] ?? 0)
+  const accountSnapshot = useRef(accounts)
+  accountSnapshot.current = accounts
   useLayoutEffect(() => {
     if (!open) return
     setSubmitError(null)
-    reset({ ...defaults, date: today })
-  }, [open, liability.id, accounts, today, reset])
+    reset({ assetId: accountSnapshot.current[0]?.id ?? '', amount: '', date: today, note: '' })
+  }, [open, liability.id, today, reset])
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null)
     try {
@@ -820,16 +829,20 @@ export function LiabilityPaymentForm({ open, liability, accounts, assetBalances,
           className="field"
           options={accounts.map((asset) => ({ value: asset.id, label: `${asset.name} · ${asset.institution}` }))}
           description={`Available to settle: Rp ${available.toLocaleString('id-ID')}`}
+          onValueChange={(assetId) => {
+            reset({ assetId, amount: '', date: today, note: '' })
+            setSubmitError(null)
+          }}
         />,
       },
       {
         label: 'Payment',
         fields: ['amount', 'date', 'note'],
         content: <>
-          <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+          <Stack direction="vertical" gap={3}>
             <CurrencyAmountField control={control} name="amount" label="Amount (IDR)" inputMode="numeric" placeholder="0" prefix="Rp" className="field" />
             <AstryxDateField control={control} name="date" label="Date" className="field" />
-          </Grid>
+          </Stack>
           <AstryxTextField control={control} name="note" label="Note" isOptional maxLength={500} className="field" />
           <SubmitError>{submitError}</SubmitError>
         </>,

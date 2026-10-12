@@ -61,15 +61,16 @@ export function DialogForm({
     return () => window.cancelAnimationFrame(frame)
   }, [open])
 
-  // Move focus to the summary when a submit attempt first produces errors, so
-  // keyboard and screen reader users are not left on the button that failed.
+  // Focus once when an error summary first appears. Later submissions focus it
+  // directly from the submit handler, including when the issue count is stable.
   useLayoutEffect(() => {
-    if (errorCount > 0 && previousErrorCountRef.current === 0) errorSummaryRef.current?.focus()
+    if (open && errorCount > 0 && previousErrorCountRef.current === 0) errorSummaryRef.current?.focus()
     previousErrorCountRef.current = errorCount
-  }, [errorCount])
+  }, [errorCount, open])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (errorCount > 0) errorSummaryRef.current?.focus()
     onSubmit()
   }
 

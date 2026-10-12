@@ -15,7 +15,8 @@
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter @kinsen/web test:e2e",
     "db:migrate": "pnpm --filter @kinsen/api db:migrate",
-    "start": "pnpm --filter @kinsen/api start"
+    "start": "pnpm --filter @kinsen/api start",
+    "mcp": "node apps/mcp/dist/index.js"
   },
   "devDependencies": {
     "@astryxdesign/cli": "^0.6.5"

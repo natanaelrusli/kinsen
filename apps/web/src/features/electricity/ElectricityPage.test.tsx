@@ -17,9 +17,8 @@ function observation(id: string, date: DateOnly, remainingMilliKwh: number, refi
 /** Value shown on the metric card carrying this label. */
 function metricCardValue(labelText: string): string {
   const label = screen.getAllByText(labelText)[0]!
-  let container: HTMLElement | null = label.parentElement
-  while (container && !container.querySelector('h3')) container = container.parentElement
-  return container?.querySelector('h3')?.textContent?.trim() ?? ''
+  const card = label.closest('.electricity-metric-card')
+  return card?.querySelector('.electricity-metric-value')?.textContent?.trim() ?? ''
 }
 
 /** Value shown on the metadata row carrying this label inside the "This month" card. */
