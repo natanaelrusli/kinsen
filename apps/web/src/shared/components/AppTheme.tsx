@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore, type React
 import { ClerkProvider } from '@clerk/react'
 import { resolveThemeTokens, Theme } from '@astryxdesign/core/theme'
 import { createAppearanceTheme } from '../theme'
-import { useSettingsStore } from '../state/settings-store'
+import { useSettingsStore, type SidebarWidth } from '../state/settings-store'
 import { setMoneyStyle } from '../format/money'
 
 const systemColorScheme = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -16,10 +16,16 @@ function syncRootAppearance(mode: 'light' | 'dark', themeName: string) {
   document.documentElement.dataset.astryxTheme = themeName
 }
 
+// The width token in styles.css reads this attribute, so both collapsed rails resize together.
+export function syncRootSidebarWidth(sidebarWidth: SidebarWidth) {
+  document.documentElement.dataset.sidebarWidth = sidebarWidth
+}
+
 // Apply saved preferences before React paints; Theme injects its palette during mount.
 export function initializeAppTheme() {
   const preferences = useSettingsStore.getState()
   setMoneyStyle(preferences.moneyStyle)
+  syncRootSidebarWidth(preferences.sidebarWidth)
   syncRootAppearance(preferences.colorMode === 'system' ? (systemColorScheme?.matches ? 'dark' : 'light') : preferences.colorMode, createAppearanceTheme(preferences).name)
 }
 
@@ -30,11 +36,16 @@ export function AppTheme({ children, withAuth = false }: { children: ReactNode; 
   const cornerStyle = useSettingsStore((state) => state.cornerStyle)
   const headingStyle = useSettingsStore((state) => state.headingStyle)
   const moneyStyle = useSettingsStore((state) => state.moneyStyle)
+  const sidebarWidth = useSettingsStore((state) => state.sidebarWidth)
   const theme = useMemo(() => createAppearanceTheme({ themeColor, surfaceStyle, cornerStyle, headingStyle }), [themeColor, surfaceStyle, cornerStyle, headingStyle])
 
   useLayoutEffect(() => {
     setMoneyStyle(moneyStyle)
   }, [moneyStyle])
+
+  useLayoutEffect(() => {
+    syncRootSidebarWidth(sidebarWidth)
+  }, [sidebarWidth])
   const subscribe = useCallback((onChange: () => void) => {
     if (colorMode !== 'system' || !systemColorScheme) return () => {}
     systemColorScheme.addEventListener('change', onChange)

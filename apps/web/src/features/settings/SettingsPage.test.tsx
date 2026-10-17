@@ -53,6 +53,19 @@ describe('SettingsPage', () => {
     })
   })
 
+  it('offers Compact, Default and Wide sidebar widths and saves the choice immediately', () => {
+    renderSettingsPage()
+
+    const sidebarWidth = screen.getByRole('radiogroup', { name: 'Sidebar width' })
+    expect(within(sidebarWidth).getAllByRole('radio', { name: /^(Compact|Default|Wide)$/ })).toHaveLength(3)
+    expect(screen.getByRole('radio', { name: 'Default' })).toBeChecked()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    expect(screen.getByRole('radio', { name: 'Wide' })).toBeChecked()
+    expect(useSettingsStore.getState().sidebarWidth).toBe('wide')
+    expect(JSON.parse(window.localStorage.getItem('kinsen-preferences') ?? 'null')).toMatchObject({ sidebarWidth: 'wide' })
+  })
+
   it('keeps the fun appearance controls inside the Appearance category', () => {
     renderSettingsPage()
 

@@ -8,7 +8,7 @@ import type { KeyboardEvent } from 'react'
 import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon, type IconName } from '../../shared/components/Icon'
-import { backdropStyleOptions, cheerToneOptions, colorModeOptions, cornerStyleOptions, dashboardSectionOptions, headingStyleOptions, moneyStyleOptions, surfaceStyleOptions, themeColorOptions, useSettingsStore } from '../../shared/state/settings-store'
+import { backdropStyleOptions, cheerToneOptions, colorModeOptions, cornerStyleOptions, dashboardSectionOptions, headingStyleOptions, moneyStyleOptions, sidebarWidthOptions, surfaceStyleOptions, themeColorOptions, useSettingsStore } from '../../shared/state/settings-store'
 import { BankEmailSettings } from './BankEmailSettings'
 import { formatIdr } from '../../shared/format/money'
 
@@ -80,6 +80,8 @@ export function SettingsPage() {
   const setBackdropStyle = useSettingsStore((state) => state.setBackdropStyle)
   const cheerTone = useSettingsStore((state) => state.cheerTone)
   const setCheerTone = useSettingsStore((state) => state.setCheerTone)
+  const sidebarWidth = useSettingsStore((state) => state.sidebarWidth)
+  const setSidebarWidth = useSettingsStore((state) => state.setSidebarWidth)
   const celebrateOnSave = useSettingsStore((state) => state.celebrateOnSave)
   const setCelebrateOnSave = useSettingsStore((state) => state.setCelebrateOnSave)
   const selectedTheme = themeColorOptions.find((option) => option.value === themeColor) ?? themeColorOptions[0]
@@ -162,6 +164,12 @@ export function SettingsPage() {
                     {colorModeOptions.map((option) => <RadioListItem key={option.value} label={option.label} value={option.value} />)}
                   </RadioList>
                   <Text type="supporting" id="color-mode-hint">System follows your device’s light or dark appearance.</Text>
+                </Stack>
+                <Stack gap={2}>
+                  <RadioList label="Sidebar width" value={sidebarWidth} onChange={(value) => setSidebarWidth(value as typeof sidebarWidth)} htmlName="sidebar-width" orientation="horizontal" aria-describedby="sidebar-width-hint">
+                    {sidebarWidthOptions.map((option) => <RadioListItem key={option.value} label={option.label} value={option.value} />)}
+                  </RadioList>
+                  <Text type="supporting" id="sidebar-width-hint">Sets the width of both navigation columns together.</Text>
                 </Stack>
                 <Stack gap={2}>
                   <Text id="accent-hint" weight="semibold">Accent color</Text>

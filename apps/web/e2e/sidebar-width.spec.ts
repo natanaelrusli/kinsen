@@ -48,3 +48,32 @@ test('a saved pane size from an earlier session does not widen the collapsed pan
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
   await expectMatchingCollapsedColumns(page)
 })
+
+// Token-derived widths: the 4px spacing scale makes each preset an exact pixel count.
+const sidebarWidthPresets = [
+  { preset: 'Compact', px: 64 },
+  { preset: 'Default', px: 80 },
+  { preset: 'Wide', px: 96 },
+] as const
+
+test.describe('sidebar width preset', () => {
+  for (const { preset, px } of sidebarWidthPresets) {
+    test(`${preset} sets both collapsed columns to ${px}px and survives a reload`, async ({ page }) => {
+      await page.goto(`${workspaceHarness}&settings-e2e=1`)
+      await page.getByRole('radio', { name: preset, exact: true }).click()
+      await expect(page.getByRole('radio', { name: preset, exact: true })).toBeChecked()
+      await expect(page.locator('html')).toHaveAttribute('data-sidebar-width', preset.toLowerCase())
+
+      await page.goto(workspaceHarness)
+      await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+      for (const section of ['Overview', 'Portfolio', 'Manage']) {
+        await page.locator('.app-nav-rail-item', { hasText: section }).click()
+        await expectMatchingCollapsedColumns(page)
+
+        const { rail, pane } = await columnWidths(page)
+        expect(rail, `${preset} rail on ${section}`).toBe(px)
+        expect(pane, `${preset} pane on ${section}`).toBe(px)
+      }
+    })
+  }
+})

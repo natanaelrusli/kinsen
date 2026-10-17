@@ -75,6 +75,25 @@ describe('settings preference loading', () => {
     expect((await storeWith({ headingStyle: ['rounded'] })).headingStyle).toBe(defaultPreferences.headingStyle)
   })
 
+  it('defaults the sidebar width to the current size for existing users', async () => {
+    expect((await reloadFromStorage()).state.sidebarWidth).toBe('default')
+    expect((await storeWith({ surfaceStyle: 'cool' })).sidebarWidth).toBe('default')
+  })
+
+  it('round-trips every sidebar width preset through storage', async () => {
+    for (const width of ['compact', 'default', 'wide'] as const) {
+      const { store } = await reloadFromStorage()
+      store.getState().setSidebarWidth(width)
+
+      expect((await reloadFromStorage()).state.sidebarWidth, `sidebar width ${width}`).toBe(width)
+    }
+  })
+
+  it('falls back to the default sidebar width for unknown values', async () => {
+    expect((await storeWith({ sidebarWidth: 'huge' })).sidebarWidth).toBe('default')
+    expect((await storeWith({ sidebarWidth: 80 })).sidebarWidth).toBe('default')
+  })
+
   it('leaves unrelated preferences untouched when one value is invalid', async () => {
     const preferences = await storeWith({ surfaceStyle: 'dusk', headingStyle: 'nope', cornerStyle: 'crisp' })
     expect(preferences.surfaceStyle).toBe('dusk')
