@@ -21,6 +21,7 @@ import { budgetRepository } from '../../infrastructure/repositories/api-budget-r
 import { setClerkTokenProvider } from '../../infrastructure/api/clerk-token-provider'
 import { Icon, type IconName } from './Icon'
 import { Celebration } from './Celebration'
+import { SyncConflictBanner } from './SyncConflictBanner'
 import { colorModeOptions, useSettingsStore, type ColorMode } from '../state/settings-store'
 
 type Destination = {
@@ -76,6 +77,7 @@ function syncSummary(status: SyncStatus, online: boolean): string {
   if (status === 'SYNCING') return 'Syncing'
   if (status === 'PENDING') return 'Sync pending'
   if (status === 'CONFLICT') return 'Sync paused'
+  if (status === 'NEEDS_DECISION') return 'Needs decision'
   if (status === 'ERROR') return 'Sync failed'
   return status === 'SYNCED' ? 'Synced' : 'Saved locally'
 }
@@ -87,6 +89,7 @@ function syncLabel(status: SyncStatus, online: boolean): string {
   if (status === 'SYNCED') return 'Saved and synced'
   if (status === 'PENDING') return 'Saved here · waiting to sync'
   if (status === 'CONFLICT') return 'Sync paused · local copy kept'
+  if (status === 'NEEDS_DECISION') return 'Sync needs your decision · nothing changed yet'
   if (status === 'ERROR') return 'Sync failed · local copy saved'
   return 'Saved on this device'
 }
@@ -360,7 +363,7 @@ export function AppShellChrome({
   const colorMode = useSettingsStore((state) => state.colorMode)
   const setColorMode = useSettingsStore((state) => state.setColorMode)
   const currentPage = destinations.find((destination) => routeMatches(pathname, destination.to, destination.to === '/'))?.label
-  const hasSyncProblem = syncStatus === 'CONFLICT' || syncStatus === 'ERROR' || syncStatus === 'ACCOUNT_MISMATCH'
+  const hasSyncProblem = syncStatus === 'CONFLICT' || syncStatus === 'NEEDS_DECISION' || syncStatus === 'ERROR' || syncStatus === 'ACCOUNT_MISMATCH'
   const electricityLocalOnly = routeMatches(pathname, '/electricity')
   const displayedSyncLabel = electricityLocalOnly ? 'Electricity readings saved on this device; not synced' : syncLabel(syncStatus, online)
   const displayedSyncSummary = electricityLocalOnly ? 'Local only' : syncSummary(syncStatus, online)
@@ -472,6 +475,7 @@ export function AppShellChrome({
             />
           }
           sideNav={<AppSidebar />}>
+          <SyncConflictBanner />
           {children}
         </AstryxAppShell>
         <MobileNavigation />

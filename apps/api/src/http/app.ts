@@ -89,6 +89,13 @@ export function createApiApp(
     response.status(imported ? 201 : 200).json({ snapshot: repository.getSnapshot(), imported })
   })
 
+  // Used only after the user chooses this device's copy over a conflicting server budget.
+  app.put('/api/budget/snapshot', (request, response) => {
+    requireDataGeneration(request, repository)
+    const snapshot = parseBody(snapshotSchema, request.body)
+    response.json({ snapshot: repository.replaceSnapshot(snapshot) })
+  })
+
   app.put('/api/budget', (request, response) => {
     requireDataGeneration(request, repository)
     const body = parseBody(saveBudgetSchema, request.body)

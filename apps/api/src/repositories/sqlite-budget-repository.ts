@@ -165,6 +165,12 @@ export class SqliteBudgetRepository {
     return true
   }
 
+  replaceSnapshot(snapshot: BudgetSnapshot): BudgetSnapshot {
+    validateBudgetSnapshot(snapshot)
+    this.inTransaction(() => this.insertSnapshot(snapshot))
+    return this.getSnapshot()
+  }
+
   saveBudget(period: BudgetPeriod, categories: Category[]): void {
     const snapshot = { ...this.getSnapshot(), period, categories }
     validateBudgetSnapshot(snapshot)

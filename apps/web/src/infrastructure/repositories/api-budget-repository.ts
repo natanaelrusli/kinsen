@@ -4,7 +4,9 @@ import { DexieBudgetRepository, budgetRepository as localRepository } from './de
 import type { PendingBudgetOperation } from './pending-budget-operation'
 import { BudgetApiClient, BudgetApiError } from '../api/budget-api-client'
 
-export type SyncStatus = 'LOCAL' | 'SYNCING' | 'SYNCED' | 'PENDING' | 'CONFLICT' | 'ERROR' | 'ACCOUNT_MISMATCH'
+export type SyncStatus = 'LOCAL' | 'SYNCING' | 'SYNCED' | 'PENDING' | 'CONFLICT' | 'NEEDS_DECISION' | 'ERROR' | 'ACCOUNT_MISMATCH'
+export type SyncConflict = { localIsSample: boolean }
+export type SyncConflictChoice = 'SERVER' | 'DEVICE'
 type SyncListener = (status: SyncStatus) => void
 
 export class ApiBudgetRepository implements BudgetRepository {
@@ -143,21 +145,26 @@ export class ApiBudgetRepository implements BudgetRepository {
       }
       if (seed) await this.local.seedIfEmpty(seed)
       const pending = await this.local.getPendingOperations()
+      const parked = await this.local.getParkedOperations()
       this.remoteInitialized = false
-      this.setStatus(pending.length ? 'PENDING' : 'LOCAL')
+      this.setStatus(parked.length ? 'NEEDS_DECISION' : pending.length ? 'PENDING' : 'LOCAL')
       return
     }
 
     const localGeneration = await this.local.getDataGeneration()
     let localDataChanged = false
     if (remoteBudget.dataGeneration > localGeneration) {
-      await this.local.clearAccountData()
+      await this.local.clearAccountData({ keepDeviceReadings: true })
       await this.local.setDataGeneration(remoteBudget.dataGeneration)
       localSnapshot = await this.local.getSnapshot()
       localDataChanged = true
     } else if (remoteBudget.dataGeneration < localGeneration) {
       this.remoteInitialized = false
       this.setStatus('CONFLICT')
+      return
+    }
+    if ((await this.local.getParkedOperations()).length) {
+      this.setStatus('NEEDS_DECISION')
       return
     }
     const remoteSnapshot = remoteBudget.snapshot
@@ -228,6 +235,42 @@ export class ApiBudgetRepository implements BudgetRepository {
     }
   }
 
+  async getSyncConflict(): Promise<SyncConflict | null> {
+    if (!(await this.local.getParkedOperations()).length) return null
+    return { localIsSample: Boolean((await this.local.getSnapshot()).period?.isSample) }
+  }
+
+  // The user chose which copy survives. Nothing is discarded silently: a failed upload leaves the conflict parked.
+  async resolveSyncConflict(choice: SyncConflictChoice): Promise<void> {
+    if (this.synchronizing) throw new Error('Wait for account data to finish syncing, then try again.')
+    if (!(await this.local.getParkedOperations()).length) return
+    this.synchronizing = true
+    try {
+      if (choice === 'SERVER') {
+        const remoteBudget = await this.api.getSnapshot()
+        if (remoteBudget.dataGeneration !== await this.local.getDataGeneration()) {
+          throw new Error('Account data changed in another session. Wait for sync, then try again.')
+        }
+        await this.local.adoptRemoteSnapshot(remoteBudget.snapshot)
+        this.remoteInitialized = true
+        this.setStatus('SYNCED')
+        this.notifyAccountDataChanges()
+        return
+      }
+
+      // Only operations queued before this upload are acknowledged; later edits stay queued and are sent normally.
+      const queued = [...await this.local.getParkedOperations(), ...await this.local.getPendingOperations()]
+      const queueIds = queued.flatMap((operation) => operation.queueId === undefined ? [] : [operation.queueId])
+      await this.api.replaceSnapshot(await this.local.getSnapshot())
+      for (const queueId of queueIds) await this.local.acknowledgePendingOperation(queueId)
+      this.remoteInitialized = true
+      await this.flushPending()
+    } finally {
+      this.synchronizing = false
+      this.startRequestedSynchronization()
+    }
+  }
+
   async deactivateAccount(): Promise<void> {
     if (this.synchronizing) throw new Error('Wait for account data to finish syncing, then try again.')
     this.synchronizing = true
@@ -241,6 +284,10 @@ export class ApiBudgetRepository implements BudgetRepository {
 
   private async flushPending(): Promise<void> {
     while (true) {
+      if ((await this.local.getParkedOperations()).length) {
+        this.setStatus('NEEDS_DECISION')
+        return
+      }
       const pending = await this.local.getPendingOperations()
       if (pending.length === 0) {
         this.setStatus(this.remoteInitialized ? 'SYNCED' : 'LOCAL')
@@ -257,6 +304,19 @@ export class ApiBudgetRepository implements BudgetRepository {
             && error.code === 'DATA_GENERATION_MISMATCH'
             && await this.reconcileDataGeneration()
           ) return
+
+          // A sample or local import the server refuses is parked for the user's choice instead of being re-sent on every sync.
+          if (
+            operation.kind === 'IMPORT_SNAPSHOT'
+            && operation.queueId !== undefined
+            && error instanceof BudgetApiError
+            && error.code === 'SNAPSHOT_CONFLICT'
+          ) {
+            await this.local.parkPendingOperation(operation.queueId, { code: 'SNAPSHOT_CONFLICT', at: Date.now() })
+            this.remoteInitialized = false
+            this.setStatus('NEEDS_DECISION')
+            return
+          }
 
           this.remoteInitialized = error instanceof BudgetApiError && (error.status === 409 || error.code === 'ACCOUNT_NOT_OWNER') ? false : this.remoteInitialized
           this.setStatus(error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER'
@@ -276,7 +336,7 @@ export class ApiBudgetRepository implements BudgetRepository {
       const localGeneration = await this.local.getDataGeneration()
       if (remoteBudget.dataGeneration <= localGeneration) return false
 
-      await this.local.clearAccountData()
+      await this.local.clearAccountData({ keepDeviceReadings: true })
       await this.local.setDataGeneration(remoteBudget.dataGeneration)
       if (remoteBudget.snapshot.period) await this.local.replaceSnapshotFromRemote(remoteBudget.snapshot)
       this.remoteInitialized = true
