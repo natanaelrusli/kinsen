@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { createSampleSnapshot } from '@kinsen/budget-domain'
 import { BudgetUseCases } from '../application/use-cases/budget-use-cases'
 import { budgetRepository } from '../infrastructure/repositories/dexie-budget-repository'
+import { budgetRepository as syncBudgetRepository } from '../infrastructure/repositories/api-budget-repository'
 import { TransactionForm } from '../features/transactions/TransactionForm'
 import { AssetsPage } from '../features/assets/AssetsPage'
 import { AssetDetailPage } from '../features/assets/AssetDetailPage'
@@ -28,6 +29,7 @@ const search = new URLSearchParams(window.location.search)
 const sidebarPreviewE2E = search.get('sidebar-e2e') === '1'
 const workspaceE2E = search.get('workspace-e2e') === '1'
 const electricityTrackerE2E = search.get('electricity-tracker-e2e') === '1'
+const syncConflictE2E = search.get('sync-conflict-e2e') === '1'
 const initialPath = electricityTrackerE2E
   ? '/electricity'
   : sidebarPreviewE2E || search.get('settings-e2e') === '1'
@@ -72,6 +74,8 @@ function initializeHarness(): Promise<void> {
         },
       })
       await useAssetStore.getState().initialize()
+      // Runs the real API sync against the seeded local copy, so a rejected sample import can reach the decision prompt.
+      if (syncConflictE2E) void syncBudgetRepository.seedIfEmpty(createSampleSnapshot(today))
     })().finally(() => { initialization = null })
   }
   return initialization

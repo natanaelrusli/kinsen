@@ -336,6 +336,22 @@ describe('Dexie budget/asset transaction atomicity', () => {
     expect(await repository.getObservations()).toEqual([])
   })
 
+  it('keeps device-local PLN readings when the account generation is adopted, but an explicit reset still clears them', async () => {
+    const repository = new DexieBudgetRepository()
+    await repository.clearAccountData()
+    const reading: TokenObservation = {
+      id: 'electricity-kept', date: '2026-01-01', sequence: 0, remainingMilliKwh: 68_000,
+      refillMilliKwh: null, refillCostIdr: null, refillSource: 'none',
+    }
+    await repository.saveObservation(reading, 0, '2026-01-02')
+
+    await repository.clearAccountData({ keepDeviceReadings: true })
+    expect(await repository.getObservations()).toEqual([reading])
+
+    await repository.clearAccountData()
+    expect(await repository.getObservations()).toEqual([])
+  })
+
 })
 
 function manualGold(id: string): AssetAccount {

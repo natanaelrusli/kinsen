@@ -31,6 +31,14 @@ export class BudgetApiClient {
     })
   }
 
+  replaceSnapshot(snapshot: BudgetSnapshot): Promise<{ snapshot: BudgetSnapshot }> {
+    return this.request('/budget/snapshot', {
+      method: 'PUT',
+      headers: this.generationHeaders(),
+      body: JSON.stringify(snapshot),
+    })
+  }
+
   saveBudget(period: BudgetPeriod, categories: Category[]): Promise<void> {
     return this.request('/budget', {
       method: 'PUT',

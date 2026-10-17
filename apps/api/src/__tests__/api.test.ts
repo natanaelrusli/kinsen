@@ -192,6 +192,20 @@ describe('budget API', () => {
     expect((await request(app).get('/api/budget')).body.snapshot).toEqual(sortedSnapshot(original))
   })
 
+  it('replaces the server budget with a device snapshot only for the current data generation', async () => {
+    const original = createSampleSnapshot('2024-01-02')
+    await postWithGeneration('/api/budget/import').send(original).expect(201)
+    const deviceCopy = createSampleSnapshot('2024-02-02')
+
+    await putWithGeneration('/api/budget/snapshot', 7).send(deviceCopy).expect(409)
+    expect((await request(app).get('/api/budget')).body.snapshot).toEqual(sortedSnapshot(original))
+
+    const replaced = await putWithGeneration('/api/budget/snapshot').send(deviceCopy)
+    expect(replaced.status).toBe(200)
+    expect(replaced.body.snapshot).toEqual(sortedSnapshot(deviceCopy))
+    expect((await request(app).get('/api/budget')).body.dataGeneration).toBe(0)
+  })
+
   it('rejects invalid budget totals and keeps the stored snapshot unchanged', async () => {
     const snapshot = createSampleSnapshot('2024-01-02')
     await postWithGeneration('/api/budget/import').send(snapshot).expect(201)

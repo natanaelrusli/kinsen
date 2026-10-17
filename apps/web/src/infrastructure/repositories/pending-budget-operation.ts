@@ -11,4 +11,6 @@ type PendingOperationPayload =
 export type PendingBudgetOperation = PendingOperationPayload & {
   queueId?: number
   createdAt: number
+  // Parked operations stay queued for the user's decision and are never re-sent automatically.
+  conflict?: { code: 'SNAPSHOT_CONFLICT'; at: number }
 }

@@ -153,8 +153,10 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
     return this.db.accountMetadata.put({ key: 'dataGeneration', value })
   }
 
-  async clearAccountData(): Promise<void> {
-    this.mutationEpoch += 1
+  // A remote generation bump replaces only the synced budget; device-local PLN readings are kept unless the user resets everything.
+  async clearAccountData(options: { keepDeviceReadings?: boolean } = {}): Promise<void> {
+    const clearReadings = !options.keepDeviceReadings
+    if (clearReadings) this.mutationEpoch += 1
     await this.db.transaction(
       'rw',
       [
@@ -182,7 +184,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
           this.db.assetValuations.clear(),
           this.db.liabilityAccounts.clear(),
           this.db.liabilityEntries.clear(),
-          this.db.electricityObservations.clear(),
+          clearReadings ? this.db.electricityObservations.clear() : Promise.resolve(),
         ])
       },
     )
@@ -506,8 +508,31 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
     })
   }
 
-  getPendingOperations(): Promise<PendingBudgetOperation[]> {
-    return this.db.pendingOperations.orderBy('queueId').toArray()
+  async getPendingOperations(): Promise<PendingBudgetOperation[]> {
+    return (await this.db.pendingOperations.orderBy('queueId').toArray()).filter((operation) => !operation.conflict)
+  }
+
+  async getParkedOperations(): Promise<PendingBudgetOperation[]> {
+    return (await this.db.pendingOperations.orderBy('queueId').toArray()).filter((operation) => operation.conflict)
+  }
+
+  parkPendingOperation(id: number, conflict: NonNullable<PendingBudgetOperation['conflict']>): Promise<number> {
+    return this.db.pendingOperations.update(id, { conflict })
+  }
+
+  // Replaces only the synced budget copy. Assets and PLN readings are device-local and untouched.
+  async adoptRemoteSnapshot(snapshot: BudgetSnapshot): Promise<void> {
+    validateSnapshot(snapshot)
+    await this.db.transaction('rw', this.db.periods, this.db.categories, this.db.plannedExpenses, this.db.transactions, this.db.pendingOperations, async () => {
+      await Promise.all([
+        this.db.periods.clear(),
+        this.db.categories.clear(),
+        this.db.plannedExpenses.clear(),
+        this.db.transactions.clear(),
+        this.db.pendingOperations.clear(),
+      ])
+      await this.writeSnapshot(snapshot)
+    })
   }
 
   acknowledgePendingOperation(id: number): Promise<void> {
