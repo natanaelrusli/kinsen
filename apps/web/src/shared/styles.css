@@ -32,7 +32,7 @@
   --app-sidebar-collapsed-selected: var(--color-sidebar-accent-muted);
   --app-sidebar-accent: var(--color-sidebar-accent);
   /* One width for both collapsed nav columns (primary rail and collapsed second pane). */
-  --app-sidebar-collapsed-width: calc(var(--spacing-12) + var(--spacing-4));
+  --app-sidebar-collapsed-width: calc(var(--spacing-12) + var(--spacing-8));
   font-optical-sizing: auto;
 }
 
@@ -91,7 +91,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
    from each other and from the page without competing with the item rows. */
 .app-nav-split { height: 100%; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); }
 .app-nav-rail { width: var(--app-sidebar-collapsed-width); flex: 0 0 auto; align-items: stretch; padding-block: var(--spacing-3); padding-inline: var(--spacing-1); overflow-y: auto; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
-.app-nav-rail-item { display: flex; width: 100%; min-height: var(--spacing-12); align-items: center; justify-content: center; padding: var(--spacing-2) 0; border-width: 0; border-style: none; border-radius: var(--radius-element); background: transparent; color: var(--app-sidebar-muted); font: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
+.app-nav-rail-item { display: flex; width: 100%; min-height: var(--spacing-12); align-items: center; justify-content: center; padding: var(--spacing-2) var(--spacing-1); border-width: 0; border-style: none; border-radius: var(--radius-element); background: transparent; color: var(--app-sidebar-muted); font: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .app-nav-rail-item:hover { background: var(--app-sidebar-hover); color: var(--app-sidebar-ink); }
 .app-nav-rail-item[data-active="true"] { background: var(--app-sidebar-selected); color: var(--app-sidebar-ink); }
 .app-nav-rail-item[data-active="true"] .app-nav-rail-label { font-weight: var(--font-weight-semibold); }
