@@ -6,7 +6,7 @@ Kinsen is an offline-first daily budget planner. The workspace contains a React 
 
 - `apps/web` — React, Vite, Dexie/IndexedDB, and the PWA frontend.
 - `apps/api` — Express 5 TypeScript API and SQLite persistence using Node's built-in `node:sqlite`.
-- `apps/mcp` — stdio Model Context Protocol server with a token-paired, loopback-only WebSocket bridge to the open app.
+- `apps/mcp` — Model Context Protocol server (stdio, or Streamable HTTP for remote agents) with a token-paired, loopback-only WebSocket bridge to the open app.
 - `packages/budget-domain` — shared budget types, validation, date-only helpers, and calculations.
 - `packages/mcp-contract` — shared MCP tool schemas and browser bridge protocol.
 
@@ -79,13 +79,77 @@ Use an absolute Node executable path in `command` if your MCP client does not in
 
 - Pair only an agent you trust: the connection grants read/write access to financial records, including deletion. It does not require an in-app prompt for each mutation; use your MCP client's tool-approval controls.
 - The secret is required, at least 32 characters, and is not saved by Kinsen's browser UI. Keep the client configuration private; never commit the secret or use a Clerk token. Rotate it by changing the client configuration, restarting its server, and pairing again.
-- The bridge listens only on `127.0.0.1`. Browser and MCP server must run on the same machine. Use the local HTTP development app; an HTTPS deployment can block the insecure `ws://` connection. This is not a public remote MCP endpoint.
+- The bridge listens only on `127.0.0.1`. Browser and MCP server must run on the same machine. Use the local HTTP development app; an HTTPS deployment can block the insecure `ws://` connection. The bridge is never a public endpoint; remote agents use the HTTP endpoint below, which still needs the signed-in browser on the same machine as the MCP server.
 - `KINSEN_APP_ORIGIN` is one exact HTTP(S) origin with no trailing slash/path. `localhost` and `127.0.0.1` are different origins. For preview use `http://127.0.0.1:4173`; for another local port change the configured origin accordingly. Origin and Host are checked before pairing; only one browser can pair with a server.
 - **Disconnect AI agent**, sign-out, closing/reloading the app, or clearing account data revokes the session. Queued commands cannot start after revocation. An operation already in progress may finish; disconnect does not roll it back.
 - Unpaired calls fail rather than waiting. Calls have a 30-second deadline, and bridge messages have a 1 MiB limit. A timeout/disconnect can leave a mutation's outcome unknown: read the current data before proceeding, and **do not retry blindly**. There is no automatic reconnection or replay.
 - Start with `kinsen_get_data` (`scope`: `all`, `budget`, `assets`, or `electricity`). Read current IDs before edits. For new records generate unique stable IDs; update tools retain those IDs. `kinsen_save_budget` takes the full category list, not a partial patch. Budget mutations report `savedLocally` and `syncStatus`; local success does not claim that the API has already synced. Assets, liabilities, and readings remain device-local.
 - Amounts are whole IDR for budgets and IDR ledgers; valuations use native currency minor units with an explicit conversion rate. Electricity balances/credits use **milli-kWh** (`1000 = 1 kWh`). Dates are calendar dates in `YYYY-MM-DD`.
 - Deletion/archive tools require `confirm: true` after user authorization. Transfers and liability payments create both linked entries atomically and do not create budget expenses. Linked/opening records cannot be overwritten as standalone activity. Manual valuations append immutable history; automatic gold prices come from real provider responses, not supplied provenance.
+
+### Remote agents over HTTP
+
+The default transport is stdio, where the agent launches the server itself. To let an agent on another device reach it, run the server in Streamable HTTP mode. Remote here means the agent can reach the machine that runs the server and the signed-in browser. Browser pairing stays loopback-only.
+
+1. Generate a secret for MCP clients, separate from the bridge secret:
+
+   ```sh
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+2. Start the server in HTTP mode. The defaults bind `127.0.0.1:3004`, and the endpoint is `http://127.0.0.1:3004/mcp`:
+
+   ```sh
+   KINSEN_MCP_TRANSPORT=http KINSEN_MCP_TOKEN=PASTE_MCP_SECRET KINSEN_BRIDGE_TOKEN=PASTE_BRIDGE_SECRET pnpm --silent mcp
+   ```
+
+3. Every request must send `Authorization: Bearer <KINSEN_MCP_TOKEN>`. Requests without it, or with a wrong or short token, get `401` with a `WWW-Authenticate` challenge. Repeated failures from one address lock that address out for a minute (`429`), including correct tokens.
+
+Example client configurations, for a local endpoint or an HTTPS one (replace `https://kinsen.example.ts.net/mcp` with your endpoint):
+
+```sh
+# Claude Code
+claude mcp add --transport http kinsen https://kinsen.example.ts.net/mcp --header "Authorization: Bearer PASTE_MCP_SECRET"
+```
+
+```json
+// Cursor: ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "kinsen": {
+      "url": "https://kinsen.example.ts.net/mcp",
+      "headers": { "Authorization": "Bearer PASTE_MCP_SECRET" }
+    }
+  }
+}
+```
+
+```toml
+# Codex: ~/.codex/config.toml. Keep the secret in an environment variable, not in the file.
+[mcp_servers.kinsen]
+url = "https://kinsen.example.ts.net/mcp"
+bearer_token_env_var = "KINSEN_MCP_TOKEN"
+```
+
+Web connectors such as claude.ai and ChatGPT require OAuth 2.1 and are not supported by this change. That is a follow-up.
+
+**Transport security is mandatory before any non-local use.** Never expose this endpoint over plain HTTP on the internet. The bearer token travels in every request, so anyone who can read the traffic can use it. Use one of these:
+
+- **Tailscale (recommended, tailnet-only).** Keep the server on `127.0.0.1` and publish it with `tailscale serve` (HTTPS on your tailnet name), or bind the tailnet address with `KINSEN_MCP_HTTP_HOST=<tailnet IP>` plus `KINSEN_MCP_HTTP_ALLOW_NON_LOOPBACK=true`. Clients reach it only from devices on your tailnet.
+- **Cloudflare Tunnel or a reverse proxy with HTTPS.** Terminate TLS at the proxy and forward to `127.0.0.1:3004`. Consider Cloudflare Access in front as a second factor, because a bearer token alone is the only gate at the server.
+
+When the proxy forwards requests, the server sees the Host the client used. Set `KINSEN_MCP_HTTP_ALLOWED_HOSTS` to the exact `Host` value clients send, for example `kinsen.example.ts.net`, and check it with `curl -v`. Requests with other hosts get `403`. Non-browser clients send no `Origin` and are accepted. Browser origins must be listed in `KINSEN_MCP_HTTP_ALLOWED_ORIGINS`, and none are by default. Behind a proxy, all clients share the proxy's address for rate limiting.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KINSEN_MCP_TRANSPORT` | `stdio` | `stdio` or `http`. |
+| `KINSEN_MCP_TOKEN` | required in `http` | MCP bearer secret, at least 32 characters, different from `KINSEN_BRIDGE_TOKEN`. |
+| `KINSEN_MCP_HTTP_HOST` | `127.0.0.1` | Bind address. Any non-loopback value also needs `KINSEN_MCP_HTTP_ALLOW_NON_LOOPBACK=true`. |
+| `KINSEN_MCP_HTTP_PORT` | `3004` | Listen port, 1 to 65535. |
+| `KINSEN_MCP_HTTP_ALLOWED_HOSTS` | loopback names with the port | Comma-separated `Host` values accepted. Required for non-loopback binds. |
+| `KINSEN_MCP_HTTP_ALLOWED_ORIGINS` | empty | Comma-separated exact browser origins accepted. |
+
+Limits: request bodies are capped at 1 MiB, request timeouts are 30 s, and new sessions stop at 100. `SIGINT` and `SIGTERM` close sessions and the browser bridge before exit.
 
 ## Configuration
 
