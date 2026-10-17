@@ -4,6 +4,7 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { Token } from '@astryxdesign/core/Token'
 import { useEffect, useState, type FormEvent } from 'react'
 import { connectMcpBridge, disconnectMcpBridge, useMcpBridgeStore } from '../../infrastructure/mcp/browser-bridge'
+import { McpHttpConnectionGuide } from './McpHttpConnectionGuide'
 
 export function AiAgentConnectionPanel() {
   const status = useMcpBridgeStore((state) => state.status)
@@ -58,6 +59,7 @@ export function AiAgentConnectionPanel() {
         )}
         <p id="ai-agent-connection-help">Keep this signed-in app open while the agent works. You can navigate to other pages without disconnecting. Disconnect, sign-out or clearing account data revokes access and queued commands; a command already in progress may still finish. Check current data before retrying a failed command. Kinsen never reconnects or replays commands automatically.</p>
         <p>Use the local HTTP development app to connect to ws://127.0.0.1:{port || '3003'}. An HTTPS page may block this insecure WebSocket. If pairing is rejected, set the server’s KINSEN_APP_ORIGIN to this app’s exact origin: {window.location.origin}. localhost and 127.0.0.1 do not match.</p>
+        <McpHttpConnectionGuide />
       </Stack>
     </section>
   )

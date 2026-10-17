@@ -68,6 +68,13 @@ describe('AI agent connection panel', () => {
     expect(screen.getByLabelText('Bridge secret')).toHaveValue('')
   })
 
+  it('shows HTTP agent instructions while leaving the bridge secret empty', () => {
+    render(<AiAgentConnectionPanel />)
+    expect(screen.getByRole('heading', { name: 'Connect an agent over HTTP' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Bridge secret')).toHaveValue('')
+    expect(screen.getByLabelText('MCP server address')).toHaveValue('http://127.0.0.1:3004')
+  })
+
   it('does not retain the paired secret when disconnecting without leaving the page', () => {
     render(<AiAgentConnectionPanel />)
     fireEvent.change(screen.getByLabelText('Bridge secret'), { target: { value: secret } })
