@@ -48,19 +48,9 @@ const destinationsById = new Map(destinations.map((destination) => [destination.
 type RouteCommand = {
   id: string
   label: string
+  icon: IconName
   auxiliaryData: { group: string; to: string; keywords: string[] }
 }
-
-const routeCommands: RouteCommand[] = destinations.map(({ id, label, to, keywords }) => ({
-  id,
-  label,
-  auxiliaryData: { group: 'Pages', to, keywords },
-}))
-
-const routeCommandSource = createStaticSource(routeCommands, {
-  keywords: (command) => command.auxiliaryData.keywords,
-})
-const routeByCommandId = new Map(routeCommands.map((command) => [command.id, command.auxiliaryData.to]))
 
 function SearchGlyph() {
   return <Icon name="search" style={{ width: 'var(--spacing-4)', height: 'var(--spacing-4)' }} />
@@ -131,6 +121,28 @@ function sidebarSectionForPathname(pathname: string): SidebarSection | undefined
     ),
   )
 }
+
+const otherPagesGroup = 'Other pages'
+
+// Sidebar sections order the palette groups so results read like the nav; destinations
+// no section lists (Budget settings, Account settings) close the list under one heading.
+const sectionDestinationIds = new Set(sidebarSections.flatMap((section) => section.destinationIds))
+const routeCommands: RouteCommand[] = [
+  ...sidebarSections.flatMap((section) => sidebarSectionDestinations(section).map((destination) => ({ destination, group: section.title }))),
+  ...destinations
+    .filter((destination) => !sectionDestinationIds.has(destination.id))
+    .map((destination) => ({ destination, group: otherPagesGroup })),
+].map(({ destination: { id, label, icon, to, keywords }, group }) => ({
+  id,
+  label,
+  icon,
+  auxiliaryData: { group, to, keywords },
+}))
+
+const routeCommandSource = createStaticSource(routeCommands, {
+  keywords: (command) => command.auxiliaryData.keywords,
+})
+const routeByCommandId = new Map(routeCommands.map((command) => [command.id, command.auxiliaryData.to]))
 
 function AppNavRail({
   activeSectionId,
@@ -482,6 +494,7 @@ export function AppShellChrome({
         onOpenChange={setIsPaletteOpen}
         input={
           <CommandPaletteInput
+            placeholder="Search pages…"
             endContent={
               <IconButton
                 className="command-palette-close"
@@ -495,6 +508,22 @@ export function AppShellChrome({
           />
         }
         searchSource={routeCommandSource}
+        renderItem={(command) => {
+          const isCurrent = routeMatches(pathname, command.auxiliaryData.to, command.auxiliaryData.to === '/')
+          return (
+            <Stack direction="horizontal" vAlign="center" gap={3} className="command-palette-page">
+              <Icon name={command.icon} size={18} aria-hidden="true" />
+              <Text className="command-palette-page-label">{command.label}</Text>
+              {isCurrent && <Text type="supporting" className="command-palette-page-current">Current page</Text>}
+            </Stack>
+          )
+        }}
+        emptySearchText={
+          <Stack gap={1} hAlign="center">
+            <Text weight="semibold">No matching pages</Text>
+            <Text type="supporting">Try a page name, such as Activity or Assets.</Text>
+          </Stack>
+        }
         label="Search pages and commands"
         onValueChange={(commandId) => {
           const destination = routeByCommandId.get(commandId)

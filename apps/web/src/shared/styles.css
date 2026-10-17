@@ -31,6 +31,8 @@
   --app-sidebar-selected: var(--color-sidebar-selected);
   --app-sidebar-collapsed-selected: var(--color-sidebar-accent-muted);
   --app-sidebar-accent: var(--color-sidebar-accent);
+  /* One width for both collapsed nav columns (primary rail and collapsed second pane). */
+  --app-sidebar-collapsed-width: calc(var(--spacing-12) + var(--spacing-8));
   font-optical-sizing: auto;
 }
 
@@ -74,8 +76,10 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .app-side-nav a[aria-current="page"]:hover { background: var(--color-sidebar-selected-hover); }
 .app-side-nav a[aria-current="page"] svg { color: var(--app-sidebar-ink); }
 .app-side-nav a:focus-visible { outline: 2px solid var(--app-sidebar-accent); outline-offset: 1px; }
-/* Collapsed pane: the 40px icon rail drops the expanded padding and section rhythm
-   so every icon keeps the same gap and stays inside the rail. */
+/* Collapsed pane: the icon rail drops the expanded padding and section rhythm
+   so every icon keeps the same gap and stays inside the rail. Its width matches the
+   primary rail (.app-nav-rail) through the shared token; Astryx's default is narrower. */
+.app-side-nav[data-sidebar-collapsed="true"] { width: var(--app-sidebar-collapsed-width); }
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"] { background: var(--app-sidebar-collapsed-selected); }
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"]:hover { background: var(--color-sidebar-accent-muted-hover); }
 .app-side-nav[data-sidebar-collapsed="true"] a[aria-current="page"] svg { color: var(--app-sidebar-accent); }
@@ -86,7 +90,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 /* Both vertical edges are quiet hairlines: they separate the two nav columns
    from each other and from the page without competing with the item rows. */
 .app-nav-split { height: 100%; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); }
-.app-nav-rail { width: 80px; flex: 0 0 auto; align-items: stretch; padding-block: var(--spacing-3); padding-inline: var(--spacing-1); overflow-y: auto; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
+.app-nav-rail { width: var(--app-sidebar-collapsed-width); flex: 0 0 auto; align-items: stretch; padding-block: var(--spacing-3); padding-inline: var(--spacing-1); overflow-y: auto; border-inline-end: var(--border-width) solid var(--app-sidebar-divider); background: var(--app-sidebar-surface); color: var(--app-sidebar-ink); }
 .app-nav-rail-item { display: flex; width: 100%; min-height: var(--spacing-12); align-items: center; justify-content: center; padding: var(--spacing-2) var(--spacing-1); border-width: 0; border-style: none; border-radius: var(--radius-element); background: transparent; color: var(--app-sidebar-muted); font: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .app-nav-rail-item:hover { background: var(--app-sidebar-hover); color: var(--app-sidebar-ink); }
 .app-nav-rail-item[data-active="true"] { background: var(--app-sidebar-selected); color: var(--app-sidebar-ink); }
@@ -107,6 +111,10 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .app-command-search-desktop:hover { background: var(--surface-soft); color: var(--ink); }
 .app-command-search-mobile { display: none; min-width: var(--spacing-11); min-height: var(--spacing-11); border-radius: var(--radius-element); }
 .topbar-appearance, .command-palette-close { min-width: var(--spacing-11); min-height: var(--spacing-11); flex: 0 0 auto; border-radius: var(--radius-element); }
+/* Search results: page icon and name on one line, the current page marked at the end. */
+.command-palette-page { min-width: 0; }
+.command-palette-page-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-palette-page-current { margin-inline-start: auto; padding-inline-start: var(--spacing-2); white-space: nowrap; }
 .topbar-status { min-width: 0; margin-inline-end: var(--spacing-3); color: var(--muted); }
 .app-top-nav > div:last-child { min-width: 0; flex: 0 0 auto; }
 .topbar-status-copy { color: var(--color-text-secondary); white-space: nowrap; }

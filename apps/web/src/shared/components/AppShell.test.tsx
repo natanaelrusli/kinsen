@@ -256,6 +256,12 @@ describe('AppShell navigation', () => {
 })
 
 describe('AppShell command search', () => {
+  function openSearchTrigger() {
+    const trigger = document.querySelector<HTMLButtonElement>('.app-command-search-desktop')
+    if (!trigger) throw new Error('Desktop search trigger is missing')
+    return trigger
+  }
+
   it('closes the palette after restoring focus to its trigger', async () => {
     const user = userEvent.setup()
     render(
@@ -285,6 +291,47 @@ describe('AppShell command search', () => {
     await user.click(screen.getByRole('button', { name: 'Close search' }))
     expect(screen.queryByRole('dialog', { name: 'Search pages and commands' })).not.toBeInTheDocument()
     expect(searchTrigger).toHaveFocus()
+  })
+
+  it('groups results by sidebar section and marks the page the user is on', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="settings" element={<h1>Settings page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(openSearchTrigger())
+    const dialog = screen.getByRole('dialog', { name: 'Search pages and commands' })
+
+    const headings = Array.from(dialog.querySelectorAll('.astryx-command-palette-group-heading'), (heading) => heading.textContent)
+    expect(headings).toEqual(['Overview', 'Portfolio', 'Manage', 'Other pages'])
+    expect(within(dialog).getByRole('option', { name: /^Settings/ })).toHaveTextContent('Current page')
+    expect(within(dialog).getByRole('option', { name: /^Assets/ })).not.toHaveTextContent('Current page')
+  })
+
+  it('explains an empty result set and names the search field', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/assets']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="assets" element={<h1>Assets page</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(openSearchTrigger())
+    const dialog = screen.getByRole('dialog', { name: 'Search pages and commands' })
+    await user.type(within(dialog).getByPlaceholderText('Search pages…'), 'zzz')
+
+    expect(within(dialog).getByText('No matching pages')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('option')).not.toBeInTheDocument()
   })
 })
 
