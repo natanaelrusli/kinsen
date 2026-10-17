@@ -35,6 +35,11 @@
   --app-sidebar-collapsed-width: calc(var(--spacing-12) + var(--spacing-8));
   font-optical-sizing: auto;
 }
+/* User presets from Settings > Appearance; set on <html> by AppTheme. Default keeps the :root value. */
+:root[data-sidebar-width="compact"] { --app-sidebar-collapsed-width: calc(var(--spacing-8) * 2); }
+/* Compact rail: drop the item's side padding so "Portfolio" and "Overview" fit without ellipsis. */
+:root[data-sidebar-width="compact"] .app-nav-rail-item { padding-inline: 0; }
+:root[data-sidebar-width="wide"] { --app-sidebar-collapsed-width: calc(var(--spacing-12) * 2); }
 
 * { box-sizing: border-box; }
 html { min-width: 320px; scroll-behavior: smooth; }

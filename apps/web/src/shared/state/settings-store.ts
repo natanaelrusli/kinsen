@@ -61,6 +61,13 @@ export const backdropStyleOptions = [
   { value: 'aurora', label: 'Soft aurora' },
 ] as const
 
+// Sidebar widths are token-derived in styles.css; both collapsed nav columns follow the same preset.
+export const sidebarWidthOptions = [
+  { value: 'compact', label: 'Compact', hint: 'Narrowest rail. Labels stay readable at this size.' },
+  { value: 'default', label: 'Default', hint: 'The standard width.' },
+  { value: 'wide', label: 'Wide', hint: 'Roomier icons and labels.' },
+] as const
+
 export const cheerToneOptions = [
   { value: 'off', label: 'Off' },
   { value: 'gentle', label: 'Gentle' },
@@ -79,6 +86,7 @@ export function celebrationShowsFeedback(preferences: Pick<AppPreferences, 'cele
 type MoneyStyle = (typeof moneyStyleOptions)[number]['value']
 type BackdropStyle = (typeof backdropStyleOptions)[number]['value']
 type CheerTone = (typeof cheerToneOptions)[number]['value']
+export type SidebarWidth = (typeof sidebarWidthOptions)[number]['value']
 
 export const dashboardSectionOptions = [
   { value: 'summary', label: 'Budget summary', description: 'Actual spending, outstanding commitments, and protected reserve.' },
@@ -105,6 +113,7 @@ export type AppPreferences = {
   backdropStyle: BackdropStyle
   cheerTone: CheerTone
   celebrateOnSave: boolean
+  sidebarWidth: SidebarWidth
 }
 
 type SettingsState = AppPreferences & {
@@ -122,6 +131,7 @@ type SettingsState = AppPreferences & {
   setBackdropStyle: (backdropStyle: BackdropStyle) => void
   setCheerTone: (cheerTone: CheerTone) => void
   setCelebrateOnSave: (celebrateOnSave: boolean) => void
+  setSidebarWidth: (sidebarWidth: SidebarWidth) => void
 }
 
 export const defaultPreferences: AppPreferences = {
@@ -138,6 +148,7 @@ export const defaultPreferences: AppPreferences = {
   backdropStyle: 'plain',
   cheerTone: 'gentle',
   celebrateOnSave: true,
+  sidebarWidth: 'default',
 }
 
 const preferencesStorageKey = 'kinsen-preferences'
@@ -188,6 +199,7 @@ function readPreferences(): AppPreferences {
       backdropStyle: backdropStyleOptions.some((option) => option.value === value.backdropStyle) ? value.backdropStyle as BackdropStyle : defaultPreferences.backdropStyle,
       cheerTone: cheerToneOptions.some((option) => option.value === value.cheerTone) ? value.cheerTone as CheerTone : defaultPreferences.cheerTone,
       celebrateOnSave: typeof value.celebrateOnSave === 'boolean' ? value.celebrateOnSave : defaultPreferences.celebrateOnSave,
+      sidebarWidth: optionValue<SidebarWidth>(value.sidebarWidth, sidebarWidthOptions, defaultPreferences.sidebarWidth),
     }
   } catch {
     return defaultPreferences
@@ -221,6 +233,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       backdropStyle: changes.backdropStyle ?? current.backdropStyle,
       cheerTone: changes.cheerTone ?? current.cheerTone,
       celebrateOnSave: changes.celebrateOnSave ?? current.celebrateOnSave,
+      sidebarWidth: changes.sidebarWidth ?? current.sidebarWidth,
     }
     set({ ...changes, persistenceStatus: savePreferences(preferences) ? 'saved' : 'error' })
   }
@@ -241,5 +254,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     setBackdropStyle: (backdropStyle) => update({ backdropStyle }),
     setCheerTone: (cheerTone) => update({ cheerTone }),
     setCelebrateOnSave: (celebrateOnSave) => update({ celebrateOnSave }),
+    setSidebarWidth: (sidebarWidth) => update({ sidebarWidth }),
   }
 })
