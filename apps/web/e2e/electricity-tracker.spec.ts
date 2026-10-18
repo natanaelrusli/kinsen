@@ -39,7 +39,7 @@ test('tracks PLN readings, corrections, same-day order, uncertainty, deletion, a
   await expect(page.getByRole('heading', { name: 'PLN Token Tracker', level: 1 })).toBeVisible()
   await expect(page.locator('.topbar-status')).toContainText('Local only')
   await expect(page.getByText('Saved on this device · not synced to your Kinsen account or other devices.')).toBeVisible()
-  await expect(page.getByText('No refill spending yet')).toBeVisible()
+  await expect(page.getByText('No refill purchases recorded yet.')).toBeVisible()
   await expect(page.getByRole('region', { name: 'Data quality' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Search pages and commands' }).click()
   const palette = page.getByRole('dialog', { name: 'Search pages and commands' })

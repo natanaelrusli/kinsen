@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { clerkKeysMissingMessage, hasClerkKeys } from './clerk-keys'
+
+test.skip(!hasClerkKeys, clerkKeysMissingMessage)
 
 test('shows Clerk sign-up and sign-in controls and opens both flows', async ({ page }) => {
   await page.goto('/')
