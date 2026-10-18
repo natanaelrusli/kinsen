@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "pnpm --filter @kinsen/budget-domain build",
+    "prebuild": "pnpm --filter @kinsen/budget-domain build && pnpm --filter @kinsen/mcp-contract build",
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
