@@ -32,7 +32,11 @@ class MemoryBudgetRepository {
   async queueImportSnapshot(snapshot: BudgetSnapshot): Promise<void> {
     this.addPending({ kind: 'IMPORT_SNAPSHOT', snapshot, createdAt: Date.now() })
   }
-  async replaceSnapshotFromRemote(snapshot: BudgetSnapshot): Promise<void> { this.snapshot = snapshot }
+  failReplace = false
+  async replaceSnapshotFromRemote(snapshot: BudgetSnapshot): Promise<void> {
+    if (this.failReplace) throw new Error('Local data already exists; refusing to replace it with the API snapshot.')
+    this.snapshot = snapshot
+  }
   async getPendingOperations(): Promise<PendingBudgetOperation[]> { return this.pending.filter((operation) => !operation.conflict) }
   async getParkedOperations(): Promise<PendingBudgetOperation[]> { return this.pending.filter((operation) => operation.conflict) }
   async parkPendingOperation(queueId: number): Promise<void> {
@@ -167,7 +171,7 @@ describe('ApiBudgetRepository background synchronization', () => {
     expect(local.snapshot).toBe(cached)
   })
 
-  it('adopts a newer remote generation without clearing device-local PLN readings', async () => {
+  it('adopts a newer remote generation without clearing device-only data', async () => {
     const cached = createSampleSnapshot(today)
     const local = new MemoryBudgetRepository(cached)
     local.generation = 0
@@ -178,7 +182,7 @@ describe('ApiBudgetRepository background synchronization', () => {
     await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
 
     expect(local.generation).toBe(3)
-    expect(local.clearOptions).toEqual([{ keepDeviceReadings: true }])
+    expect(local.clearOptions).toEqual([{ keepDeviceOnlyData: true }])
   })
 
   describe('sample import rejected by the server', () => {
@@ -219,7 +223,7 @@ describe('ApiBudgetRepository background synchronization', () => {
 
     it('reports the sample copy and the decision for the conflict', async () => {
       const { repository } = await parkedSampleImport()
-      await expect(repository.getSyncConflict()).resolves.toEqual({ localIsSample: true })
+      await expect(repository.getSyncConflict()).resolves.toEqual({ localIsSample: true, explanation: expect.stringMatching(/sample budget/) })
     })
 
     it('keeps the server copy by dropping the local import and adopting the remote budget', async () => {
@@ -258,7 +262,236 @@ describe('ApiBudgetRepository background synchronization', () => {
       await expect(repository.resolveSyncConflict('DEVICE')).rejects.toThrow()
 
       expect(repository.getSyncStatus()).toBe('NEEDS_DECISION')
-      await expect(repository.getSyncConflict()).resolves.toEqual({ localIsSample: true })
+      await expect(repository.getSyncConflict()).resolves.toEqual({ localIsSample: true, explanation: expect.stringMatching(/sample budget/) })
+    })
+  })
+
+  describe('conflicts without parked operations', () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
+    const emptySnapshot: BudgetSnapshot = { period: null, categories: [], plannedExpenses: [], transactions: [] }
+
+    function divergedBudgets() {
+      const local = createSampleSnapshot(today)
+      const remote = { ...local, period: { ...local.period!, totalAmount: local.period!.totalAmount + 100 } }
+      return { local, remote }
+    }
+
+    // Each case must end in a decision (never a plain pause), and each decision must reach SYNCED.
+    it('asks for a decision when both budgets exist and differ, then keeps the server copy and reaches SYNCED', async () => {
+      const { local: cached, remote } = divergedBudgets()
+      const local = new MemoryBudgetRepository(cached)
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }), replaceSnapshot: vi.fn() }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(await repository.getSyncConflict()).toEqual({ localIsSample: true, explanation: expect.stringMatching(/budget period/) })
+      expect(local.snapshot).toBe(cached)
+      expect(api.replaceSnapshot).not.toHaveBeenCalled()
+
+      await repository.resolveSyncConflict('SERVER')
+
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.snapshot).toEqual(remote)
+      expect(await repository.getSyncConflict()).toBeNull()
+    })
+
+    it("asks for a decision when both budgets differ, then uploads this device's copy and reaches SYNCED", async () => {
+      const { local: cached, remote } = divergedBudgets()
+      const local = new MemoryBudgetRepository(cached)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }),
+        replaceSnapshot: vi.fn().mockResolvedValue({ snapshot: cached }),
+      }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+
+      await repository.resolveSyncConflict('DEVICE')
+
+      expect(api.replaceSnapshot).toHaveBeenCalledWith(cached)
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(await repository.getSyncConflict()).toBeNull()
+    })
+
+    it('keeps the decision after a reload, because the next load re-checks the server', async () => {
+      const { local: cached, remote } = divergedBudgets()
+      const local = new MemoryBudgetRepository(cached)
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }) }
+      await repositoryFor(local, api).seedIfEmpty(cached)
+
+      const reloaded = repositoryFor(local, api)
+      await reloaded.seedIfEmpty(cached)
+
+      await vi.waitFor(() => expect(reloaded.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(await reloaded.getSyncConflict()).not.toBeNull()
+    })
+
+    it('keeps the decision visible while the server cannot be reached', async () => {
+      const { local: cached, remote } = divergedBudgets()
+      const local = new MemoryBudgetRepository(cached)
+      const api = { getSnapshot: vi.fn().mockResolvedValueOnce({ snapshot: remote, dataGeneration: 0 }).mockRejectedValue(new TypeError('offline')) }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      await repository.seedIfEmpty(local.snapshot)
+      await settle()
+
+      expect(repository.getSyncStatus()).toBe('NEEDS_DECISION')
+      expect(await repository.getSyncConflict()).not.toBeNull()
+    })
+
+    it('adopts an older server generation automatically when this device holds no budget', async () => {
+      const remote = createSampleSnapshot(today)
+      const local = new MemoryBudgetRepository(emptySnapshot)
+      local.generation = 5
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 2 }) }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(remote)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+      expect(local.generation).toBe(2)
+      expect(local.snapshot).toEqual(remote)
+    })
+
+    it('asks for a decision when the server generation is older than a device that holds data, then adopts it', async () => {
+      const { local: cached, remote } = divergedBudgets()
+      const local = new MemoryBudgetRepository(cached)
+      local.generation = 5
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 2 }) }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(local.generation).toBe(5)
+
+      await repository.resolveSyncConflict('SERVER')
+
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.generation).toBe(2)
+      expect(local.snapshot).toEqual(remote)
+    })
+
+    it('asks for a decision when the server has a budget but this device has only unsent changes, and keeps the server copy', async () => {
+      const remote = createSampleSnapshot(today)
+      const local = new MemoryBudgetRepository(emptySnapshot)
+      local.pending.push({ kind: 'DELETE_TRANSACTION', id: 'unsent', createdAt: 1, queueId: 99 })
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }) }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(emptySnapshot)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(await repository.getSyncConflict()).toEqual({ localIsSample: false, explanation: expect.stringMatching(/unsent changes/) })
+
+      await repository.resolveSyncConflict('SERVER')
+
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.snapshot).toEqual(remote)
+      expect(local.pending).toHaveLength(0)
+    })
+
+    it('uploads this device copy when a remote-only decision is made, then reaches SYNCED', async () => {
+      const remote = createSampleSnapshot(today)
+      const local = new MemoryBudgetRepository(emptySnapshot)
+      local.pending.push({ kind: 'DELETE_TRANSACTION', id: 'unsent', createdAt: 1, queueId: 99 })
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }),
+        replaceSnapshot: vi.fn().mockResolvedValue({ snapshot: emptySnapshot }),
+      }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(emptySnapshot)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      await repository.resolveSyncConflict('DEVICE')
+
+      expect(api.replaceSnapshot).toHaveBeenCalledWith(emptySnapshot)
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.pending).toHaveLength(0)
+    })
+
+    it('asks for a decision when the server budget cannot be written over leftover local data, then keeps the server copy', async () => {
+      const remote = createSampleSnapshot(today)
+      const leftover = { ...emptySnapshot, categories: createSampleSnapshot(today).categories }
+      const local = new MemoryBudgetRepository(leftover)
+      local.failReplace = true
+      const api = { getSnapshot: vi.fn().mockResolvedValue({ snapshot: remote, dataGeneration: 0 }) }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(leftover)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+
+      await repository.resolveSyncConflict('SERVER')
+
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.snapshot).toEqual(remote)
+    })
+
+    it('asks for a decision when the server rejects a queued change with a generic conflict, then keeps the server copy', async () => {
+      const cached = createSampleSnapshot(today)
+      const local = new MemoryBudgetRepository(cached)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValue({ snapshot: cached, dataGeneration: 0 }),
+        saveTransaction: vi.fn().mockRejectedValue(new BudgetApiError(409, 'TRANSACTION_CONFLICT', 'changed elsewhere')),
+        replaceSnapshot: vi.fn(),
+      }
+      const repository = repositoryFor(local, api)
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+
+      await repository.saveTransaction({ ...cached.transactions[0]!, id: 'rejected', description: 'Rejected' })
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(await repository.getSyncConflict()).toEqual({ localIsSample: true, explanation: expect.stringMatching(/rejected a change/) })
+
+      await repository.resolveSyncConflict('SERVER')
+
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.pending).toHaveLength(0)
+      expect(api.replaceSnapshot).not.toHaveBeenCalled()
+    })
+
+    it('uploads this device copy after a generic conflict on a queued change, then reaches SYNCED', async () => {
+      const cached = createSampleSnapshot(today)
+      const local = new MemoryBudgetRepository(cached)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValue({ snapshot: cached, dataGeneration: 0 }),
+        saveTransaction: vi.fn().mockRejectedValue(new BudgetApiError(409, 'TRANSACTION_CONFLICT', 'changed elsewhere')),
+        replaceSnapshot: vi.fn().mockResolvedValue({ snapshot: cached }),
+      }
+      const repository = repositoryFor(local, api)
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+      await repository.saveTransaction({ ...cached.transactions[0]!, id: 'rejected', description: 'Rejected' })
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+
+      await repository.resolveSyncConflict('DEVICE')
+
+      expect(api.replaceSnapshot).toHaveBeenCalledTimes(1)
+      expect(repository.getSyncStatus()).toBe('SYNCED')
+      expect(local.pending).toHaveLength(0)
+    })
+
+    it('re-checks the server and adopts a new generation automatically when a change is refused for a generation mismatch', async () => {
+      const cached = createSampleSnapshot(today)
+      const bumped = { ...cached, period: { ...cached.period!, totalAmount: cached.period!.totalAmount + 100 } }
+      const local = new MemoryBudgetRepository(cached)
+      const api = {
+        getSnapshot: vi.fn()
+          .mockResolvedValueOnce({ snapshot: cached, dataGeneration: 0 })
+          .mockResolvedValue({ snapshot: bumped, dataGeneration: 1 }),
+        saveTransaction: vi.fn().mockRejectedValue(new BudgetApiError(409, 'DATA_GENERATION_MISMATCH', 'changed')),
+      }
+      const repository = repositoryFor(local, api)
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+
+      await repository.saveTransaction({ ...cached.transactions[0]!, id: 'late', description: 'Late' })
+
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+      expect(local.generation).toBe(1)
+      expect(local.snapshot).toEqual(bumped)
+      expect(local.clearOptions).toEqual([{ keepDeviceOnlyData: true }])
     })
   })
 })

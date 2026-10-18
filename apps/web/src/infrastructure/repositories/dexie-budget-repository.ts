@@ -153,10 +153,10 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
     return this.db.accountMetadata.put({ key: 'dataGeneration', value })
   }
 
-  // A remote generation bump replaces only the synced budget; device-local PLN readings are kept unless the user resets everything.
-  async clearAccountData(options: { keepDeviceReadings?: boolean } = {}): Promise<void> {
-    const clearReadings = !options.keepDeviceReadings
-    if (clearReadings) this.mutationEpoch += 1
+  // A remote generation bump replaces only the synced budget. Device-only assets, liabilities and PLN readings are kept unless the user resets everything.
+  async clearAccountData(options: { keepDeviceOnlyData?: boolean } = {}): Promise<void> {
+    const clearDeviceOnlyData = !options.keepDeviceOnlyData
+    if (clearDeviceOnlyData) this.mutationEpoch += 1
     await this.db.transaction(
       'rw',
       [
@@ -179,12 +179,12 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
           this.db.plannedExpenses.clear(),
           this.db.transactions.clear(),
           this.db.pendingOperations.clear(),
-          this.db.assetAccounts.clear(),
-          this.db.assetEntries.clear(),
-          this.db.assetValuations.clear(),
-          this.db.liabilityAccounts.clear(),
-          this.db.liabilityEntries.clear(),
-          clearReadings ? this.db.electricityObservations.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.assetAccounts.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.assetEntries.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.assetValuations.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.liabilityAccounts.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.liabilityEntries.clear() : Promise.resolve(),
+          clearDeviceOnlyData ? this.db.electricityObservations.clear() : Promise.resolve(),
         ])
       },
     )
