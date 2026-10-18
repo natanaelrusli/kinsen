@@ -83,9 +83,15 @@ describe('ApiBudgetRepository background synchronization', () => {
     const remote = deferred<{ snapshot: BudgetSnapshot; dataGeneration: number }>()
     let releaseFirstSend!: () => void
     const firstSend = new Promise<void>((resolve) => { releaseFirstSend = resolve })
+    // Stateful server: the first read is the delayed remote copy, later reads return what the sends stored.
+    let server: BudgetSnapshot = cached
+    let reads = 0
     const api = {
-      getSnapshot: vi.fn(() => remote.promise),
-      saveTransaction: vi.fn((transaction: Transaction) => transaction.id === 'audit-sync-first' ? firstSend : Promise.resolve()),
+      getSnapshot: vi.fn(() => (reads++ === 0 ? remote.promise : Promise.resolve({ snapshot: server, dataGeneration: 0 }))),
+      saveTransaction: vi.fn((transaction: Transaction) => {
+        const stored = () => { server = { ...server, transactions: [...server.transactions, transaction] } }
+        return transaction.id === 'audit-sync-first' ? firstSend.then(stored) : Promise.resolve().then(stored)
+      }),
     }
     const repository = repositoryFor(local, api)
 
@@ -193,13 +199,17 @@ describe('ApiBudgetRepository background synchronization', () => {
       const sample = createSampleSnapshot(today)
       const real = { ...sample, period: { ...sample.period!, id: 'real-2026-10', totalAmount: 9_000_000 } }
       const local = new MemoryBudgetRepository({ period: null, categories: [], plannedExpenses: [], transactions: [] })
+      // Stateful server: writes are stored so later reads see them, as the real API does.
+      let server: BudgetSnapshot = real
       const api = {
         getSnapshot: vi.fn()
           .mockRejectedValueOnce(new TypeError('offline'))
-          .mockResolvedValue({ snapshot: real, dataGeneration: 0 }),
+          .mockImplementation(async () => ({ snapshot: server, dataGeneration: 0 })),
         importSnapshot: vi.fn().mockRejectedValue(new BudgetApiError(409, 'SNAPSHOT_CONFLICT', 'different snapshot')),
-        replaceSnapshot: vi.fn(),
-        saveTransaction: vi.fn().mockResolvedValue(undefined),
+        replaceSnapshot: vi.fn(async (snapshot: BudgetSnapshot) => { server = snapshot; return { snapshot } }),
+        saveTransaction: vi.fn(async (transaction: Transaction) => {
+          server = { ...server, transactions: [...server.transactions.filter((item) => item.id !== transaction.id), transaction] }
+        }),
       }
       const repository = repositoryFor(local, api)
       await repository.seedIfEmpty(sample)
@@ -240,8 +250,6 @@ describe('ApiBudgetRepository background synchronization', () => {
 
     it("uses this device's copy by replacing the remote budget, then resumes normal sync", async () => {
       const { api, local, sample, repository } = await parkedSampleImport()
-      api.replaceSnapshot.mockResolvedValue({ snapshot: sample })
-
       await repository.resolveSyncConflict('DEVICE')
 
       expect(api.replaceSnapshot).toHaveBeenCalledWith(sample)
@@ -470,6 +478,68 @@ describe('ApiBudgetRepository background synchronization', () => {
       expect(api.replaceSnapshot).toHaveBeenCalledTimes(1)
       expect(repository.getSyncStatus()).toBe('SYNCED')
       expect(local.pending).toHaveLength(0)
+    })
+
+    it('never reports Synced when unsent changes are sent but the server then differs from this device', async () => {
+      const cached = createSampleSnapshot(today)
+      const tx: Transaction = { ...cached.transactions[0]!, id: 'unsent-diverged', description: 'Unsent' }
+      const remote = { ...cached, period: { ...cached.period!, totalAmount: cached.period!.totalAmount + 100 } }
+      const local = new MemoryBudgetRepository(cached)
+      await local.saveTransaction(tx)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValueOnce({ snapshot: cached, dataGeneration: 0 }).mockResolvedValue({ snapshot: remote, dataGeneration: 0 }),
+        saveTransaction: vi.fn().mockResolvedValue(undefined),
+      }
+      const repository = repositoryFor(local, api)
+      const statuses: string[] = []
+      repository.subscribeSyncStatus((status) => statuses.push(status))
+
+      await repository.seedIfEmpty(cached)
+
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(api.saveTransaction).toHaveBeenCalledTimes(1)
+      expect(statuses).not.toContain('SYNCED')
+      expect(await repository.getSyncConflict()).toEqual({ localIsSample: true, explanation: expect.stringMatching(/budget period/) })
+    })
+
+    it('reaches Synced after unsent changes are sent when the server matches this device afterwards', async () => {
+      const cached = createSampleSnapshot(today)
+      const tx: Transaction = { ...cached.transactions[0]!, id: 'unsent-matched', description: 'Unsent' }
+      const afterSend = { ...cached, transactions: [...cached.transactions, tx] }
+      const local = new MemoryBudgetRepository(cached)
+      await local.saveTransaction(tx)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValueOnce({ snapshot: cached, dataGeneration: 0 }).mockResolvedValue({ snapshot: afterSend, dataGeneration: 0 }),
+        saveTransaction: vi.fn().mockResolvedValue(undefined),
+      }
+      const repository = repositoryFor(local, api)
+
+      await repository.seedIfEmpty(cached)
+
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+      expect(api.saveTransaction).toHaveBeenCalledTimes(1)
+    })
+
+    it('detects another device diverging on a save without waiting for a reload', async () => {
+      const cached = createSampleSnapshot(today)
+      const remote = { ...cached, period: { ...cached.period!, totalAmount: cached.period!.totalAmount + 100 } }
+      const local = new MemoryBudgetRepository(cached)
+      const api = {
+        getSnapshot: vi.fn().mockResolvedValue({ snapshot: cached, dataGeneration: 0 }),
+        saveTransaction: vi.fn().mockResolvedValue(undefined),
+      }
+      const repository = repositoryFor(local, api)
+      await repository.seedIfEmpty(cached)
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('SYNCED'))
+
+      api.getSnapshot.mockResolvedValue({ snapshot: remote, dataGeneration: 0 })
+      const statuses: string[] = []
+      repository.subscribeSyncStatus((status) => statuses.push(status))
+      statuses.length = 0
+      await repository.saveTransaction({ ...cached.transactions[0]!, id: 'late-diverged', description: 'Late' })
+
+      await vi.waitFor(() => expect(repository.getSyncStatus()).toBe('NEEDS_DECISION'))
+      expect(statuses).not.toContain('SYNCED')
     })
 
     it('re-checks the server and adopts a new generation automatically when a change is refused for a generation mismatch', async () => {

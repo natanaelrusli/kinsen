@@ -312,6 +312,7 @@ export class ApiBudgetRepository implements BudgetRepository {
   }
 
   private async flushPending(): Promise<void> {
+    let sentAny = false
     while (true) {
       if ((await this.local.getParkedOperations()).length) {
         this.setStatus('NEEDS_DECISION')
@@ -319,6 +320,11 @@ export class ApiBudgetRepository implements BudgetRepository {
       }
       const pending = await this.local.getPendingOperations()
       if (pending.length === 0) {
+        if (this.remoteInitialized && sentAny) {
+          const verdict = await this.compareWithServer()
+          if (verdict === 'AGAIN') continue
+          if (verdict !== 'MATCH') return
+        }
         this.setStatus(this.remoteInitialized ? 'SYNCED' : 'LOCAL')
         return
       }
@@ -326,6 +332,7 @@ export class ApiBudgetRepository implements BudgetRepository {
       for (const operation of pending) {
         try {
           await this.send(operation)
+          sentAny = true
           if (operation.queueId !== undefined) await this.local.acknowledgePendingOperation(operation.queueId)
         } catch (error) {
           // A generation mismatch means the server changed under this device: re-check it (a newer generation is adopted, an older one is a decision).
@@ -364,6 +371,31 @@ export class ApiBudgetRepository implements BudgetRepository {
     }
   }
 
+
+  // SYNCED is only claimed once the server holds this device's budget. A send that succeeded does not prove the two copies match:
+  // another device may have changed the budget since the last check, so each flush that sent changes re-reads the server.
+  private async compareWithServer(): Promise<'MATCH' | 'AGAIN' | 'STOP'> {
+    let remoteBudget: { snapshot: BudgetSnapshot; dataGeneration: number }
+    try {
+      remoteBudget = await this.api.getSnapshot()
+    } catch {
+      this.remoteInitialized = false
+      this.setStatus('PENDING')
+      return 'STOP'
+    }
+    // A change queued while the comparison ran is sent first, then compared again.
+    if ((await this.local.getPendingOperations()).length) return 'AGAIN'
+    if (remoteBudget.dataGeneration !== await this.local.getDataGeneration()) {
+      this.remoteInitialized = false
+      this.remoteCheckRequested = true
+      this.syncRequested = true
+      return 'STOP'
+    }
+    const localSnapshot = await this.local.getSnapshot()
+    if (snapshotsMatch(localSnapshot, remoteBudget.snapshot)) return 'MATCH'
+    this.requireDecision(describeDifferences(localSnapshot, remoteBudget.snapshot))
+    return 'STOP'
+  }
 
   private async send(operation: PendingBudgetOperation): Promise<void> {
     switch (operation.kind) {
