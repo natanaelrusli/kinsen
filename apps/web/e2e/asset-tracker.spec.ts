@@ -49,6 +49,24 @@ async function addAsset(page: Page, details: { name: string; type: AssetType; in
   await expect(page.getByRole('link', { name: new RegExp(details.name) })).toBeVisible()
 }
 
+/**
+ * Geometry is read only once layout has settled: two frames in a row must report the same box,
+ * so a dialog or card that is still animating in is not measured mid-flight.
+ */
+async function settledBox(locator: Locator) {
+  let previous: string | undefined
+  await expect.poll(async () => {
+    const key = JSON.stringify(await locator.boundingBox())
+    const settled = key === previous
+    previous = key
+    if (!settled) await locator.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    return settled
+  }).toBe(true)
+  const box = await locator.boundingBox()
+  expect(box, 'element must have a layout box').not.toBeNull()
+  return box!
+}
+
 async function startAssetHarness(page: Page) {
   await page.goto('/?asset-tracker-e2e=1')
   await expect(page.getByRole('heading', { name: 'Assets', level: 1 })).toBeVisible()
@@ -217,7 +235,7 @@ test('keeps budget fields within narrow mobile viewports', async ({ page }) => {
     await page.getByRole('button', { name: 'Continue' }).click()
     const saveButton = page.getByRole('button', { name: 'Save budget' })
     await expect(saveButton).toBeVisible()
-    const box = await saveButton.boundingBox()
+    const box = await settledBox(saveButton)
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(0)
     expect(box!.x + box!.width).toBeLessThanOrEqual(width)
@@ -246,7 +264,7 @@ test('keeps the expense form inside narrow phone viewports', async ({ page }) =>
     await page.setViewportSize(viewport)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width)
 
-    const bounds = await dialog.boundingBox()
+    const bounds = await settledBox(dialog)
     expect(bounds).not.toBeNull()
     expect(bounds!.x).toBeGreaterThanOrEqual(0)
     expect(bounds!.y).toBeGreaterThanOrEqual(0)
@@ -262,8 +280,8 @@ test('keeps the expense form inside narrow phone viewports', async ({ page }) =>
     const amount = form.getByRole('textbox', { name: 'Amount' })
     const description = form.getByRole('textbox', { name: 'Description' })
     await expect(amount).toHaveAttribute('inputmode', 'numeric')
-    const amountBounds = await amount.boundingBox()
-    const descriptionBounds = await description.boundingBox()
+    const amountBounds = await settledBox(amount)
+    const descriptionBounds = await settledBox(description)
     expect(amountBounds).not.toBeNull()
     expect(descriptionBounds).not.toBeNull()
     expect(amountBounds!.y).toBeLessThan(descriptionBounds!.y)
@@ -390,7 +408,7 @@ test('keeps the mobile calendar grid and opens selected-day details in a dialog'
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   const day = grid.getByRole('button').nth(10)
-  const box = await day.boundingBox()
+  const box = await settledBox(day)
   expect(box).not.toBeNull()
   expect(box!.width).toBeGreaterThanOrEqual(44)
   expect(box!.height).toBeGreaterThanOrEqual(44)
@@ -459,8 +477,8 @@ test('stretches the WHERE IT GOES card to match the dashboard row height', async
   const category = page.getByRole('region', { name: 'Category pulse' })
   const commitments = page.locator('.commitments-preview')
   await expect(category).toBeVisible()
-  const categoryBox = await category.boundingBox()
-  const commitmentsBox = await commitments.boundingBox()
+  const categoryBox = await settledBox(category)
+  const commitmentsBox = await settledBox(commitments)
   expect(categoryBox).not.toBeNull()
   expect(commitmentsBox).not.toBeNull()
   expect(Math.abs(categoryBox!.height - commitmentsBox!.height)).toBeLessThanOrEqual(1)
@@ -483,7 +501,7 @@ test('keeps asset section actions at least 44px across touch-width layouts', asy
     ]
     for (const action of actions) {
       await expect(action).toBeVisible()
-      const bounds = await action.boundingBox()
+      const bounds = await settledBox(action)
       expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(44)
     }
   }
@@ -505,9 +523,9 @@ test('lays out asset page actions in two equal-width columns at 970px', async ({
   expect(await actions.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2)
 
   const [refresh, update, add] = await Promise.all([
-    buttons.nth(0).boundingBox(),
-    buttons.nth(1).boundingBox(),
-    buttons.nth(2).boundingBox(),
+    settledBox(buttons.nth(0)),
+    settledBox(buttons.nth(1)),
+    settledBox(buttons.nth(2)),
   ])
   expect(refresh?.height ?? 0).toBeGreaterThan(0)
   expect(update?.height ?? 0).toBeGreaterThanOrEqual(44)
@@ -538,9 +556,9 @@ test('reflows asset actions to the content width inside the desktop shell', asyn
   await expect(buttons).toHaveCount(3)
   expect(await actions.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2)
   const [refresh, update, add] = await Promise.all([
-    buttons.nth(0).boundingBox(),
-    buttons.nth(1).boundingBox(),
-    buttons.nth(2).boundingBox(),
+    settledBox(buttons.nth(0)),
+    settledBox(buttons.nth(1)),
+    settledBox(buttons.nth(2)),
   ])
   expect(Math.abs((refresh?.height ?? 0) - (update?.height ?? 0))).toBeLessThanOrEqual(1)
   expect(Math.abs((add?.height ?? 0) - (update?.height ?? 0))).toBeLessThanOrEqual(1)
@@ -549,7 +567,9 @@ test('reflows asset actions to the content width inside the desktop shell', asyn
 
 
 test('creates valuations, transfers tracked cash, and links one expense without mixing wealth into the budget', async ({ page }) => {
-  await startAssetHarness(page)
+  // The workspace route mounts the app shell, which is where the save celebration is rendered.
+  await page.goto('/?asset-tracker-e2e=1&workspace-e2e=1')
+  await expect(page.getByRole('heading', { name: 'Assets', level: 1 })).toBeVisible()
   const initialSafeToSpend = await page.getByTestId('safe-to-spend').getAttribute('data-value')
   const initialSpent = Number(await page.getByTestId('actual-spent').getAttribute('data-value'))
   const initialTransactions = Number(await page.getByTestId('transaction-count').getAttribute('data-value'))
@@ -624,7 +644,8 @@ test('creates valuations, transfers tracked cash, and links one expense without 
   await expenseDialog.getByLabel('Description').click()
   await expect(expenseAmount).toHaveValue('25,000')
   await expenseDialog.getByRole('button', { name: 'Save expense' }).click()
-  await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('status').filter({ hasText: 'Expense added' })).toBeVisible()
+  // The celebration replaces the "Expense added" toast while celebration feedback is enabled (the default).
+  await expect(page.locator('.celebration')).toBeAttached()
   await expect(page.getByTestId('transaction-count')).toHaveAttribute('data-value', String(initialTransactions + 1))
   await expect(page.getByTestId('actual-spent')).toHaveAttribute('data-value', String(initialSpent + 25_000))
   await expect(page.getByRole('link', { name: /BCA Daily/ })).toContainText('Rp 1.075.000')
@@ -664,12 +685,8 @@ test('saves and reloads a dated cash activity with the app offline on mobile', a
   await startAssetHarness(page)
   await addAsset(page, { name: 'Offline wallet', type: 'E_WALLET', institution: 'Flazz', purpose: 'DAILY_CASH', amount: '100000' })
 
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }))
-    }
-  })
+  // The service worker must control this page before going offline, or the reload below has no cache to serve from.
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 30_000 })
   await context.setOffline(true)
   await page.getByRole('link', { name: /Offline wallet/ }).click()
   await page.getByRole('button', { name: 'Add activity' }).click()
@@ -681,12 +698,13 @@ test('saves and reloads a dated cash activity with the app offline on mobile', a
   await activityDialog.locator('textarea[name="note"]').fill('Offline top-up')
   await activityDialog.getByRole('button', { name: 'Record activity' }).click()
   await expect(page.getByRole('heading', { name: 'Offline wallet' })).toBeVisible()
-  await expect(page.getByText('Rp 110.000', { exact: true })).toBeVisible()
+  // The balance also appears in the activity table, so scope the check to the current value summary.
+  await expect(page.getByRole('region', { name: 'Current asset value' })).toContainText('Rp 110.000')
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Assets', level: 1 })).toBeVisible()
   await page.getByRole('link', { name: /Offline wallet/ }).click()
-  await expect(page.getByText('Rp 110.000', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Current asset value' })).toContainText('Rp 110.000')
   await expect(page.getByText('Offline top-up')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
@@ -949,12 +967,8 @@ test('retains saved gold through failed, missing, older and stale quotes, then r
   await openDestination(page, 'Portfolio', 'Assets')
   await page.setViewportSize({ width: 390, height: 844 })
 
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }))
-    }
-  })
+  // The service worker must control this page before going offline, or the reload below has no cache to serve from.
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 30_000 })
   await context.setOffline(true)
   await expect(page.getByRole('button', { name: 'Refresh gold prices', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Refresh price for Retained Antam renamed', exact: true })).toBeDisabled()

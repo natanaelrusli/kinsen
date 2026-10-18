@@ -33,7 +33,7 @@ Open `http://<this-machine's-LAN-IP>:3001` on the other device. The frontend ser
 ```sh
 pnpm test       # domain, web and API behavior tests
 pnpm build      # all workspace packages
-pnpm test:e2e   # Clerk controls, budget guard, asset accounting and offline UI flows
+pnpm test:e2e   # asset accounting, electricity and offline UI flows; Clerk controls and budget guard need .env.local Clerk keys and are skipped without them
 pnpm db:migrate # apply SQLite migrations without starting the API
 ```
 
