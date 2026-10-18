@@ -35,7 +35,7 @@ describe('SyncConflictBanner', () => {
   })
 
   it('explains that the local copy is sample data and offers both choices', async () => {
-    getSyncConflict.mockResolvedValue({ localIsSample: true })
+    getSyncConflict.mockResolvedValue({ localIsSample: true, explanation: 'This device has the sample budget, and the server already has a different budget.' })
     render(<SyncConflictBanner />)
 
     const alert = await screen.findByRole('alert')
@@ -45,8 +45,16 @@ describe('SyncConflictBanner', () => {
     expect(screen.getByRole('button', { name: "Use this device's copy" })).toBeInTheDocument()
   })
 
+  it('shows the repository explanation of what differs between the two copies', async () => {
+    getSyncConflict.mockResolvedValue({ localIsSample: false, explanation: 'This device and the server have different budgets: budget period, transactions (device 2, server 3).' })
+    render(<SyncConflictBanner />)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('budget period, transactions (device 2, server 3).')
+  })
+
   it('keeps the server copy without a confirmation step', async () => {
-    getSyncConflict.mockResolvedValue({ localIsSample: false })
+    getSyncConflict.mockResolvedValue({ localIsSample: false, explanation: 'This device and the server have different budgets.' })
     resolveSyncConflict.mockResolvedValue(undefined)
     render(<SyncConflictBanner />)
 
@@ -57,7 +65,7 @@ describe('SyncConflictBanner', () => {
   })
 
   it("replaces the server budget with this device's copy only after an explicit confirmation", async () => {
-    getSyncConflict.mockResolvedValue({ localIsSample: false })
+    getSyncConflict.mockResolvedValue({ localIsSample: false, explanation: 'This device and the server have different budgets.' })
     resolveSyncConflict.mockResolvedValue(undefined)
     render(<SyncConflictBanner />)
 
@@ -71,7 +79,7 @@ describe('SyncConflictBanner', () => {
   })
 
   it('shows the failure and keeps both choices available', async () => {
-    getSyncConflict.mockResolvedValue({ localIsSample: true })
+    getSyncConflict.mockResolvedValue({ localIsSample: true, explanation: 'This device has the sample budget, and the server already has a different budget.' })
     resolveSyncConflict.mockRejectedValue(new Error('Account data changed in another session.'))
     render(<SyncConflictBanner />)
 

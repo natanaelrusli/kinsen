@@ -10,7 +10,7 @@ import { ConfirmationDialog } from './ConfirmationDialog'
 export function SyncConflictBanner() {
   const syncStatus = useBudgetStore((state) => state.syncStatus)
   const refresh = useBudgetStore((state) => state.refresh)
-  const [localIsSample, setLocalIsSample] = useState(false)
+  const [explanation, setExplanation] = useState('This device and the server have different budgets.')
   const [isConfirmingDevice, setIsConfirmingDevice] = useState(false)
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +20,7 @@ export function SyncConflictBanner() {
     if (!needsDecision) return
     let active = true
     void budgetRepository.getSyncConflict().then((conflict) => {
-      if (active) setLocalIsSample(conflict?.localIsSample ?? false)
+      if (active && conflict) setExplanation(conflict.explanation)
     })
     return () => { active = false }
   }, [needsDecision])
@@ -48,9 +48,7 @@ export function SyncConflictBanner() {
         container="section"
         collapsible={false}
         title="Sync needs your decision"
-        description={localIsSample
-          ? 'This device has the sample budget, and the server already has a different budget. Choose which copy to keep. Nothing changes until you choose.'
-          : 'This device and the server have different budgets. Choose which copy to keep. Nothing changes until you choose.'}
+        description={`${explanation} Choose which copy to keep. Nothing changes until you choose.`}
         endContent={(
           <Stack direction="horizontal" gap={2}>
             <Button label="Keep server copy" variant="primary" type="button" isDisabled={isBusy} onClick={() => void resolve('SERVER')} />

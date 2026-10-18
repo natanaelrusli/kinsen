@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { describe, expect, it, vi } from 'vitest'
-import { calculateFinancialPosition, createGoldValuation, deriveLedgerBalance } from '@kinsen/budget-domain'
+import { calculateFinancialPosition, createGoldValuation, createSampleSnapshot, deriveLedgerBalance } from '@kinsen/budget-domain'
 import type { AssetAccount, AssetEntry, AssetValuation, GoldPriceQuote, LiabilityAccount, LiabilityEntry, TokenObservation, Transaction } from '@kinsen/budget-domain'
 import { DexieBudgetRepository } from './dexie-budget-repository'
 import { AssetUseCases } from '../../application/use-cases/asset-use-cases'
@@ -336,19 +336,33 @@ describe('Dexie budget/asset transaction atomicity', () => {
     expect(await repository.getObservations()).toEqual([])
   })
 
-  it('keeps device-local PLN readings when the account generation is adopted, but an explicit reset still clears them', async () => {
+  it('keeps device-only assets, liabilities and PLN readings when the account generation changes, but an explicit reset still clears them', async () => {
     const repository = new DexieBudgetRepository()
     await repository.clearAccountData()
+    const cash = account('cash-generation', 'Cash', 1_000)
+    await repository.createAsset(cash.asset, { entry: cash.openingEntry })
+    const liability: LiabilityAccount = { id: 'card-generation', name: 'Credit card', type: 'CREDIT_CARD', institution: 'Bank', nativeCurrency: 'IDR', createdAt: '2024-01-01' }
+    await repository.createLiability(liability, { id: 'card-generation-opening', liabilityId: liability.id, date: '2024-01-01', kind: 'OPENING_BALANCE', amountMinor: 300 })
     const reading: TokenObservation = {
       id: 'electricity-kept', date: '2026-01-01', sequence: 0, remainingMilliKwh: 68_000,
       refillMilliKwh: null, refillCostIdr: null, refillSource: 'none',
     }
     await repository.saveObservation(reading, 0, '2026-01-02')
+    await repository.seedIfEmpty(createSampleSnapshot(activityDate))
 
-    await repository.clearAccountData({ keepDeviceReadings: true })
+    await repository.clearAccountData({ keepDeviceOnlyData: true })
+    expect((await repository.getSnapshot()).period).toBeNull()
+    const kept = await repository.getAssetData()
+    expect(kept.assets.map((asset) => asset.id)).toEqual([cash.asset.id])
+    expect(kept.assetEntries.map((entry) => entry.id)).toEqual([cash.openingEntry.id])
+    expect(kept.liabilities.map((item) => item.id)).toEqual([liability.id])
+    expect(kept.liabilityEntries.map((entry) => entry.id)).toEqual(['card-generation-opening'])
     expect(await repository.getObservations()).toEqual([reading])
 
     await repository.clearAccountData()
+    const cleared = await repository.getAssetData()
+    expect(cleared.assets).toEqual([])
+    expect(cleared.liabilities).toEqual([])
     expect(await repository.getObservations()).toEqual([])
   })
 

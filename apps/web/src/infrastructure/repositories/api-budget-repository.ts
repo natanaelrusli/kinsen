@@ -4,10 +4,18 @@ import { DexieBudgetRepository, budgetRepository as localRepository } from './de
 import type { PendingBudgetOperation } from './pending-budget-operation'
 import { BudgetApiClient, BudgetApiError } from '../api/budget-api-client'
 
-export type SyncStatus = 'LOCAL' | 'SYNCING' | 'SYNCED' | 'PENDING' | 'CONFLICT' | 'NEEDS_DECISION' | 'ERROR' | 'ACCOUNT_MISMATCH'
-export type SyncConflict = { localIsSample: boolean }
+// Every conflict ends in NEEDS_DECISION: the user picks one whole copy, so no state is a plain pause.
+export type SyncStatus = 'LOCAL' | 'SYNCING' | 'SYNCED' | 'PENDING' | 'NEEDS_DECISION' | 'ERROR' | 'ACCOUNT_MISMATCH'
+export type SyncConflict = { localIsSample: boolean; explanation: string }
 export type SyncConflictChoice = 'SERVER' | 'DEVICE'
 type SyncListener = (status: SyncStatus) => void
+
+const sampleConflictExplanation = 'This device has the sample budget, and the server already has a different budget.'
+const snapshotConflictExplanation = 'This device and the server have different budgets.'
+const rejectedChangeExplanation = 'The server rejected a change because its budget differs from this device.'
+const unsentRemoteOnlyExplanation = 'This device has unsent changes but no budget, and the server has a budget. Keeping the server copy discards the unsent changes.'
+const olderServerGenerationExplanation = 'The server has an older account data generation than this device.'
+const leftoverLocalDataExplanation = 'This device has leftover budget data that the server budget cannot be loaded over.'
 
 export class ApiBudgetRepository implements BudgetRepository {
   private status: SyncStatus = 'LOCAL'
@@ -17,6 +25,8 @@ export class ApiBudgetRepository implements BudgetRepository {
   private remoteCheckRequested = false
   private requestedSeed: BudgetSnapshot | undefined
   private remoteInitialized = false
+  // Why a divergence (not a parked import) needs a decision; re-derived from the server on every remote check.
+  private conflictExplanation: string | null = null
   private readonly listeners = new Set<SyncListener>()
   private readonly accountDataListeners = new Set<() => void>()
 
@@ -84,7 +94,7 @@ export class ApiBudgetRepository implements BudgetRepository {
   }
 
   private afterLocalMutation(): void {
-    if (this.status !== 'ACCOUNT_MISMATCH') this.setStatus('PENDING')
+    if (this.status !== 'ACCOUNT_MISMATCH' && this.status !== 'NEEDS_DECISION') this.setStatus('PENDING')
     void this.requestSynchronization(false).catch(() => this.setStatus('ERROR'))
   }
 
@@ -126,7 +136,7 @@ export class ApiBudgetRepository implements BudgetRepository {
       this.remoteCheckRequested = false
       this.requestedSeed = undefined
       if (checkRemote) {
-        if (this.status !== 'PENDING' && this.status !== 'ACCOUNT_MISMATCH') this.setStatus('SYNCING')
+        if (this.status !== 'PENDING' && this.status !== 'ACCOUNT_MISMATCH' && this.status !== 'NEEDS_DECISION') this.setStatus('SYNCING')
         await this.synchronizeRemote(seed)
       } else await this.flushPending()
     }
@@ -147,21 +157,29 @@ export class ApiBudgetRepository implements BudgetRepository {
       const pending = await this.local.getPendingOperations()
       const parked = await this.local.getParkedOperations()
       this.remoteInitialized = false
-      this.setStatus(parked.length ? 'NEEDS_DECISION' : pending.length ? 'PENDING' : 'LOCAL')
+      if (parked.length || this.conflictExplanation !== null) this.setStatus('NEEDS_DECISION')
+      else this.setStatus(pending.length ? 'PENDING' : 'LOCAL')
       return
     }
+    // The server answered, so any earlier divergence is re-derived from this fresh copy below.
+    this.conflictExplanation = null
 
     const localGeneration = await this.local.getDataGeneration()
     let localDataChanged = false
     if (remoteBudget.dataGeneration > localGeneration) {
-      await this.local.clearAccountData({ keepDeviceReadings: true })
+      // A server reset bumps the generation: the synced budget is replaced, device-only assets, liabilities and PLN readings stay.
+      await this.local.clearAccountData({ keepDeviceOnlyData: true })
       await this.local.setDataGeneration(remoteBudget.dataGeneration)
       localSnapshot = await this.local.getSnapshot()
       localDataChanged = true
     } else if (remoteBudget.dataGeneration < localGeneration) {
-      this.remoteInitialized = false
-      this.setStatus('CONFLICT')
-      return
+      // Nothing local to lose: adopt the server generation. Otherwise the user decides which copy survives.
+      const hasUnsentChanges = (await this.local.getPendingOperations()).length > 0 || (await this.local.getParkedOperations()).length > 0
+      if (!isEmptySnapshot(localSnapshot) || hasUnsentChanges) {
+        this.requireDecision(olderServerGenerationExplanation)
+        return
+      }
+      await this.local.setDataGeneration(remoteBudget.dataGeneration)
     }
     if ((await this.local.getParkedOperations()).length) {
       this.setStatus('NEEDS_DECISION')
@@ -187,8 +205,7 @@ export class ApiBudgetRepository implements BudgetRepository {
     }
     if (!localSnapshot.period && remoteSnapshot.period) {
       if (pending.length) {
-        this.remoteInitialized = false
-        this.setStatus('CONFLICT')
+        this.requireDecision(unsentRemoteOnlyExplanation)
         return
       }
       try {
@@ -197,8 +214,7 @@ export class ApiBudgetRepository implements BudgetRepository {
         this.setStatus('SYNCED')
         this.notifyAccountDataChanges()
       } catch {
-        this.remoteInitialized = false
-        this.setStatus('CONFLICT')
+        this.requireDecision(leftoverLocalDataExplanation)
       }
       return
     }
@@ -214,8 +230,14 @@ export class ApiBudgetRepository implements BudgetRepository {
       return
     }
 
+    this.requireDecision(describeDifferences(localSnapshot, remoteSnapshot))
+  }
+
+  // The status is NEEDS_DECISION and remoteInitialized is false, so the next change re-checks the server before it is sent.
+  private requireDecision(explanation: string): void {
+    this.conflictExplanation = explanation
     this.remoteInitialized = false
-    this.setStatus('CONFLICT')
+    this.setStatus('NEEDS_DECISION')
   }
 
   async resetAccountData(): Promise<void> {
@@ -236,33 +258,40 @@ export class ApiBudgetRepository implements BudgetRepository {
   }
 
   async getSyncConflict(): Promise<SyncConflict | null> {
-    if (!(await this.local.getParkedOperations()).length) return null
-    return { localIsSample: Boolean((await this.local.getSnapshot()).period?.isSample) }
+    const localIsSample = Boolean((await this.local.getSnapshot()).period?.isSample)
+    if ((await this.local.getParkedOperations()).length) {
+      return { localIsSample, explanation: localIsSample ? sampleConflictExplanation : snapshotConflictExplanation }
+    }
+    if (this.conflictExplanation === null) return null
+    return { localIsSample, explanation: this.conflictExplanation }
   }
 
-  // The user chose which copy survives. Nothing is discarded silently: a failed upload leaves the conflict parked.
+  // The user chose which copy survives. Nothing is discarded silently: a failed upload leaves the decision open.
+  // Either choice replaces only the synced budget; device-only assets, liabilities and PLN readings are never touched.
   async resolveSyncConflict(choice: SyncConflictChoice): Promise<void> {
     if (this.synchronizing) throw new Error('Wait for account data to finish syncing, then try again.')
-    if (!(await this.local.getParkedOperations()).length) return
+    if (!(await this.getSyncConflict())) return
     this.synchronizing = true
     try {
       if (choice === 'SERVER') {
         const remoteBudget = await this.api.getSnapshot()
-        if (remoteBudget.dataGeneration !== await this.local.getDataGeneration()) {
-          throw new Error('Account data changed in another session. Wait for sync, then try again.')
-        }
         await this.local.adoptRemoteSnapshot(remoteBudget.snapshot)
+        await this.local.setDataGeneration(remoteBudget.dataGeneration)
+        this.conflictExplanation = null
         this.remoteInitialized = true
         this.setStatus('SYNCED')
         this.notifyAccountDataChanges()
         return
       }
 
-      // Only operations queued before this upload are acknowledged; later edits stay queued and are sent normally.
+      // The fresh generation becomes the upload header. Only operations queued before this upload are acknowledged; later edits stay queued.
+      const remoteBudget = await this.api.getSnapshot()
       const queued = [...await this.local.getParkedOperations(), ...await this.local.getPendingOperations()]
       const queueIds = queued.flatMap((operation) => operation.queueId === undefined ? [] : [operation.queueId])
       await this.api.replaceSnapshot(await this.local.getSnapshot())
       for (const queueId of queueIds) await this.local.acknowledgePendingOperation(queueId)
+      await this.local.setDataGeneration(remoteBudget.dataGeneration)
+      this.conflictExplanation = null
       this.remoteInitialized = true
       await this.flushPending()
     } finally {
@@ -283,6 +312,7 @@ export class ApiBudgetRepository implements BudgetRepository {
   }
 
   private async flushPending(): Promise<void> {
+    let sentAny = false
     while (true) {
       if ((await this.local.getParkedOperations()).length) {
         this.setStatus('NEEDS_DECISION')
@@ -290,6 +320,11 @@ export class ApiBudgetRepository implements BudgetRepository {
       }
       const pending = await this.local.getPendingOperations()
       if (pending.length === 0) {
+        if (this.remoteInitialized && sentAny) {
+          const verdict = await this.compareWithServer()
+          if (verdict === 'AGAIN') continue
+          if (verdict !== 'MATCH') return
+        }
         this.setStatus(this.remoteInitialized ? 'SYNCED' : 'LOCAL')
         return
       }
@@ -297,13 +332,16 @@ export class ApiBudgetRepository implements BudgetRepository {
       for (const operation of pending) {
         try {
           await this.send(operation)
+          sentAny = true
           if (operation.queueId !== undefined) await this.local.acknowledgePendingOperation(operation.queueId)
         } catch (error) {
-          if (
-            error instanceof BudgetApiError
-            && error.code === 'DATA_GENERATION_MISMATCH'
-            && await this.reconcileDataGeneration()
-          ) return
+          // A generation mismatch means the server changed under this device: re-check it (a newer generation is adopted, an older one is a decision).
+          if (error instanceof BudgetApiError && error.code === 'DATA_GENERATION_MISMATCH') {
+            this.remoteInitialized = false
+            this.remoteCheckRequested = true
+            this.syncRequested = true
+            return
+          }
 
           // A sample or local import the server refuses is parked for the user's choice instead of being re-sent on every sync.
           if (
@@ -318,36 +356,46 @@ export class ApiBudgetRepository implements BudgetRepository {
             return
           }
 
-          this.remoteInitialized = error instanceof BudgetApiError && (error.status === 409 || error.code === 'ACCOUNT_NOT_OWNER') ? false : this.remoteInitialized
+          if (error instanceof BudgetApiError && error.status === 409) {
+            this.requireDecision(rejectedChangeExplanation)
+            return
+          }
+
+          this.remoteInitialized = error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER' ? false : this.remoteInitialized
           this.setStatus(error instanceof BudgetApiError && error.code === 'ACCOUNT_NOT_OWNER'
             ? 'ACCOUNT_MISMATCH'
-            : error instanceof BudgetApiError && error.status === 409
-              ? 'CONFLICT'
-              : error instanceof BudgetApiError && error.status < 500 ? 'ERROR' : 'PENDING')
+            : error instanceof BudgetApiError && error.status < 500 ? 'ERROR' : 'PENDING')
           return
         }
       }
     }
   }
 
-  private async reconcileDataGeneration(): Promise<boolean> {
+
+  // SYNCED is only claimed once the server holds this device's budget. A send that succeeded does not prove the two copies match:
+  // another device may have changed the budget since the last check, so each flush that sent changes re-reads the server.
+  private async compareWithServer(): Promise<'MATCH' | 'AGAIN' | 'STOP'> {
+    let remoteBudget: { snapshot: BudgetSnapshot; dataGeneration: number }
     try {
-      const remoteBudget = await this.api.getSnapshot()
-      const localGeneration = await this.local.getDataGeneration()
-      if (remoteBudget.dataGeneration <= localGeneration) return false
-
-      await this.local.clearAccountData({ keepDeviceReadings: true })
-      await this.local.setDataGeneration(remoteBudget.dataGeneration)
-      if (remoteBudget.snapshot.period) await this.local.replaceSnapshotFromRemote(remoteBudget.snapshot)
-      this.remoteInitialized = true
-      this.setStatus('SYNCED')
-      this.notifyAccountDataChanges()
-      return true
+      remoteBudget = await this.api.getSnapshot()
     } catch {
-      return false
+      this.remoteInitialized = false
+      this.setStatus('PENDING')
+      return 'STOP'
     }
+    // A change queued while the comparison ran is sent first, then compared again.
+    if ((await this.local.getPendingOperations()).length) return 'AGAIN'
+    if (remoteBudget.dataGeneration !== await this.local.getDataGeneration()) {
+      this.remoteInitialized = false
+      this.remoteCheckRequested = true
+      this.syncRequested = true
+      return 'STOP'
+    }
+    const localSnapshot = await this.local.getSnapshot()
+    if (snapshotsMatch(localSnapshot, remoteBudget.snapshot)) return 'MATCH'
+    this.requireDecision(describeDifferences(localSnapshot, remoteBudget.snapshot))
+    return 'STOP'
   }
-
 
   private async send(operation: PendingBudgetOperation): Promise<void> {
     switch (operation.kind) {
@@ -384,6 +432,27 @@ export class ApiBudgetRepository implements BudgetRepository {
 
 function snapshotsMatch(left: BudgetSnapshot, right: BudgetSnapshot): boolean {
   return JSON.stringify(canonicalSnapshot(left)) === JSON.stringify(canonicalSnapshot(right))
+}
+
+function isEmptySnapshot(snapshot: BudgetSnapshot): boolean {
+  return !snapshot.period && snapshot.categories.length === 0 && snapshot.plannedExpenses.length === 0 && snapshot.transactions.length === 0
+}
+
+// Names the parts that differ, with list sizes, so the user can tell which copy is which before choosing.
+function describeDifferences(local: BudgetSnapshot, remote: BudgetSnapshot): string {
+  const localParts = canonicalSnapshot(local)
+  const remoteParts = canonicalSnapshot(remote)
+  const sections = [
+    { label: 'budget period', counts: null },
+    { label: 'categories', counts: [local.categories.length, remote.categories.length] },
+    { label: 'planned expenses', counts: [local.plannedExpenses.length, remote.plannedExpenses.length] },
+    { label: 'transactions', counts: [local.transactions.length, remote.transactions.length] },
+  ]
+  const differing = sections.flatMap((section, index) => {
+    if (JSON.stringify(localParts[index]) === JSON.stringify(remoteParts[index])) return []
+    return [section.counts ? `${section.label} (device ${section.counts[0]}, server ${section.counts[1]})` : section.label]
+  })
+  return `This device and the server have different budgets: ${differing.join(', ')}.`
 }
 
 function canonicalSnapshot(snapshot: BudgetSnapshot): unknown[] {
