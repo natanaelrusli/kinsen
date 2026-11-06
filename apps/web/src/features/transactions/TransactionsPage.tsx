@@ -1,4 +1,6 @@
 import { Button } from '@astryxdesign/core/Button'
+import { Stack } from '@astryxdesign/core/Stack'
+import { Text } from '@astryxdesign/core/Text'
 import { EmptyState } from '@astryxdesign/core/EmptyState'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -93,19 +95,19 @@ export function TransactionsPage() {
   return (
     <>
       <PageHeader eyebrow="WHAT YOU SPENT" title="Activity" description="Every recorded expense, with the actuals that shape today's number." actions={<Button label="New expense" className="button button-primary" variant="primary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={18} />}></Button>} />
-      <div className="activity-summary-row"><div><span className="stat-label">Spent this period</span><strong>{formatIdr(overview.actualSpent)}</strong></div><div className="activity-summary-caption"><Icon name="receipt" size={18} /><span>{transactions.length} recorded {transactions.length === 1 ? 'expense' : 'expenses'}</span></div></div>
+      <Stack direction="horizontal" className="activity-summary-row"><Stack gap={0.5}><Text type="inherit" className="stat-label">Spent this period</Text><strong>{formatIdr(overview.actualSpent)}</strong></Stack><Stack direction="horizontal" className="activity-summary-caption"><Icon name="receipt" size={18} /><Text type="inherit">{transactions.length} recorded {transactions.length === 1 ? 'expense' : 'expenses'}</Text></Stack></Stack>
       <section className="section-block activity-section">
-        <div className="section-heading"><div><p className="eyebrow">TRANSACTION HISTORY</p><h2>Recent activity</h2></div><TextInput label="Search activity" isLabelHidden className="search-field" startIcon={<Icon name="activity" size={17} />} placeholder="Search activity" value={query} onChange={(value) => {
+        <Stack direction="horizontal" className="section-heading"><Stack gap={0}><p className="eyebrow">TRANSACTION HISTORY</p><h2>Recent activity</h2></Stack><TextInput label="Search activity" isLabelHidden className="search-field" startIcon={<Icon name="activity" size={17} />} placeholder="Search activity" value={query} onChange={(value) => {
           const nextParams = new URLSearchParams(searchParams)
           if (value) nextParams.set('q', value)
           else nextParams.delete('q')
           setSearchParams(nextParams, { replace: true })
-        }} /></div>
+        }} /></Stack>
         {error && <p className="inline-alert" role="alert"><Icon name="warning" size={17} />{error}</p>}
-        {deleteMessage && <div className="undo-notice"><span role="status">{deleteMessage}</span>{undoTransaction && <Button label="Undo" className="button button-small button-quiet" variant="ghost" type="button" onClick={() => void undoDelete()} isDisabled={deleting} />}</div>}
-        {transactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="receipt" size={23} /></span>} title="No expenses recorded" description="Add an actual expense when money leaves your account. Safe to spend recalculates as soon as it is saved." actions={<Button label="Add an expense" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={17} />}></Button>} /> : matchingTransactions.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="activity" size={23} /></span>} title="No matches" description="Try another description or category." /> : <div className="transaction-list">
+        {deleteMessage && <Stack direction="horizontal" className="undo-notice"><Text type="inherit" role="status">{deleteMessage}</Text>{undoTransaction && <Button label="Undo" className="button button-small button-quiet" variant="ghost" type="button" onClick={() => void undoDelete()} isDisabled={deleting} />}</Stack>}
+        {transactions.length === 0 ? <EmptyState className="empty-state" icon={<Text type="inherit" className="empty-icon"><Icon name="receipt" size={23} /></Text>} title="No expenses recorded" description="Add an actual expense when money leaves your account. Safe to spend recalculates as soon as it is saved." actions={<Button label="Add an expense" className="button button-secondary" variant="secondary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={17} />}></Button>} /> : matchingTransactions.length === 0 ? <EmptyState className="empty-state" icon={<Text type="inherit" className="empty-icon"><Icon name="activity" size={23} /></Text>} title="No matches" description="Try another description or category." /> : <Stack className="transaction-list">
           {visibleTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} categoryName={categoryNames.get(transaction.categoryId) ?? 'Uncategorized'} onEdit={(item) => { setEditing(item); setFormOpen(true) }} onDelete={setConfirmingTransaction} deleteDisabled={deleting || Boolean(undoTransaction)} />)}
-        </div>}
+        </Stack>}
         <RecordPagination count={matchingTransactions.length} page={currentPage} onPageChange={setPage} />
       </section>
       <TransactionForm open={formOpen} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />

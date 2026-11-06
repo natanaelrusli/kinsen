@@ -366,20 +366,30 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .upcoming-footer { display: flex; justify-content: space-between; gap: 8px; padding-top: 12px; color: var(--muted); font-size: 12px; }
 .upcoming-footer > span { display: grid; gap: 2px; }
 .upcoming-footer small { color: var(--muted); font-size: 11px; line-height: 1.35; }
-.undo-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 11px 14px; border: 1px solid var(--color-border-green); border-radius: 12px; background: var(--color-background-green); color: var(--color-text-green); font-size: 13px; }
+.undo-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-3); margin: 0 0 var(--spacing-4); padding: 11px 14px; border: 1px solid var(--color-border-green); border-radius: var(--radius-container); background: var(--color-background-green); color: var(--color-text-green); font-size: 13px; }
 .undo-notice > span { min-width: 0; overflow-wrap: anywhere; }
 .upcoming-footer strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .recent-section { margin-top: 16px; }
-.transaction-list { display: grid; }
-.transaction-row { display: flex; min-height: 67px; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.transaction-list { display: grid; container: txn-list / inline-size; }
+.transaction-row { display: flex; min-height: 67px; align-items: center; gap: var(--spacing-3); border-bottom: 1px solid var(--line); }
 .transaction-row:last-child { border-bottom: 0; }
-.transaction-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: var(--surface-soft); color: var(--muted); }
+.transaction-icon { display: grid; width: var(--spacing-9); height: var(--spacing-9); flex: 0 0 auto; place-items: center; border-radius: 11px; background: var(--surface-soft); color: var(--muted); }
 .transaction-main { display: grid; min-width: 0; flex: 1; gap: 3px; }
-.transaction-main strong { overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-main strong { overflow: hidden; color: var(--ink); font-size: var(--font-size-sm); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .transaction-main > span { color: var(--muted); font-size: 10px; }
 .transaction-main i { margin: 0 3px; color: var(--muted-light); font-style: normal; }
-.transaction-amount { color: var(--ink-strong); font-size: 12px; font-weight: 680; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.transaction-amount { color: var(--ink-strong); font-size: var(--font-size-sm); font-weight: 680; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .linked-badge { padding: 4px 7px; border-radius: 999px; background: var(--color-background-green); color: var(--color-text-green); font-size: 9px; white-space: nowrap; }
+/* Rows reflow on the list's own width (the pane shrinks with the sidebar, the viewport does not). */
+@container txn-list (max-width: 32rem) {
+  .transaction-row { display: grid; min-height: calc(var(--spacing-12) + var(--spacing-4)); grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-2); padding-block: var(--spacing-3); }
+  .transaction-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--font-size-base); }
+  .transaction-main > span { font-size: var(--font-size-sm); }
+  .transaction-row .row-actions { grid-column: 2 / -1; justify-self: end; gap: var(--spacing-2); }
+  .transaction-row .row-actions .icon-button { width: var(--spacing-11); height: var(--spacing-11); }
+  .transaction-row .linked-badge { grid-column: 2 / -1; justify-self: start; }
+  .transaction-amount { font-size: var(--font-size-base); }
+}
 .row-actions { display: inline-flex; align-items: center; gap: 3px; }
 .row-actions .icon-button { width: 37px; height: 37px; }
 .empty-state { display: flex; min-height: 170px; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 25px 18px; color: var(--muted); text-align: center; }
@@ -477,8 +487,8 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
  .commitment-card-bottom .row-actions { flex: 0 0 auto; }
  .commitment-card-bottom .icon-button { width: var(--spacing-9); height: var(--spacing-9); }
 .app-progress-bar [role="progressbar"] { height: 6px; }
-.activity-summary-row { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.activity-summary-row > div:first-child { display: grid; gap: 4px; }
+.activity-summary-row { display: flex; align-items: end; justify-content: space-between; gap: var(--spacing-5); padding: var(--spacing-4) var(--spacing-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.activity-summary-row > div:first-child { display: grid; gap: var(--spacing-1); }
 .activity-summary-row > div:first-child > strong { color: var(--ink-strong); font-size: 22px; font-variant-numeric: tabular-nums; }
 .activity-summary-caption { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .activity-summary-caption svg { color: var(--muted-light); }
@@ -844,13 +854,6 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .section-heading > .text-link { font-size: 12px; }
   .category-pulse-list { gap: 15px; }
   .recent-section { margin-top: 11px; }
-  .transaction-row { display: grid; min-height: calc(var(--spacing-12) + var(--spacing-4)); grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-2); padding-block: var(--spacing-3); }
-  .transaction-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--font-size-base); }
-  .transaction-main > span { font-size: var(--font-size-sm); }
-  .transaction-row .row-actions { grid-column: 2 / -1; justify-self: end; gap: var(--spacing-2); }
-  .transaction-row .row-actions .icon-button { width: var(--spacing-11); height: var(--spacing-11); }
-  .transaction-row .linked-badge { grid-column: 2 / -1; justify-self: start; }
-  .transaction-amount { font-size: var(--font-size-base); }
   .calendar-month-actions { width: 100%; justify-content: space-between; }
   .calendar-month-actions > strong { min-width: 0; flex: 1; }
   .calendar-month-actions .icon-button { width: var(--spacing-11); height: var(--spacing-11); }
@@ -870,7 +873,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .three-stats .stat-card { min-height: 121px; padding: 13px; }
   .three-stats .stat-card:last-child { grid-column: span 2; min-height: 104px; }
   .stat-card > strong { font-size: 19px; }
-  .commitments-section, .activity-section { margin-top: 12px; }
+  .commitments-section, .activity-section { margin-top: var(--spacing-3); }
   .commitment-card { padding-block: var(--spacing-2); padding-inline: 0; }
   .commitment-card-bottom { align-items: flex-start; }
   .commitment-card-bottom .row-actions { flex-wrap: nowrap; }
