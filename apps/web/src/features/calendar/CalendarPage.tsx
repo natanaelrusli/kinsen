@@ -8,7 +8,7 @@ import { Link } from '@astryxdesign/core/Link'
 import type { DateOnly } from '@kinsen/budget-domain'
 import { addDays, addMonths, daysInMonth, parseDateOnly, weekday } from '@kinsen/budget-domain/date-only'
 import { formatDate, formatMonth, localToday } from '../../shared/format/date'
-import { formatIdr } from '../../shared/format/money'
+import { formatCompactIdr, formatIdr } from '../../shared/format/money'
 import { Icon } from '../../shared/components/Icon'
 import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
 import { PageSkeleton } from '../../shared/components/PageSkeleton'
@@ -192,7 +192,7 @@ export function CalendarPage() {
               const label = `${formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}. Actual ${formatIdr(totals.actual)}. Planned ${formatIdr(totals.planned)}.`
               return <Button key={date} label={label} variant="ghost" type="button" className={`calendar-day${!isCurrentMonth ? ' outside-month' : ''}${!inBudget ? ' outside-budget' : ''}${isToday ? ' is-today' : ''}${isSelected ? ' is-selected' : ''}`} aria-label={label} aria-pressed={isSelected} onClick={() => handleSelectDate(date)}>
                 <span className="calendar-day-number">{parseDateOnly(date).day}</span>
-                {inBudget && <span className="calendar-day-totals">{totals.actual > 0 && <span className="calendar-actual">{formatIdr(totals.actual)}</span>}{totals.planned > 0 && <span className="calendar-planned">{formatIdr(totals.planned)} planned</span>}</span>}
+                {inBudget && <span className="calendar-day-totals">{totals.actual > 0 && <span className="calendar-actual">{formatCompactIdr(totals.actual)}</span>}{totals.planned > 0 && <span className="calendar-planned">{formatCompactIdr(totals.planned)} planned</span>}</span>}
               </Button>
             })}
           </Grid>

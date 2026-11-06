@@ -95,7 +95,7 @@ export function TransactionsPage() {
       <PageHeader eyebrow="WHAT YOU SPENT" title="Activity" description="Every recorded expense, with the actuals that shape today's number." actions={<Button label="New expense" className="button button-primary" variant="primary" type="button" onClick={() => { setEditing(null); setFormOpen(true) }} icon={<Icon name="plus" size={18} />}></Button>} />
       <div className="activity-summary-row"><div><span className="stat-label">Spent this period</span><strong>{formatIdr(overview.actualSpent)}</strong></div><div className="activity-summary-caption"><Icon name="receipt" size={18} /><span>{transactions.length} recorded {transactions.length === 1 ? 'expense' : 'expenses'}</span></div></div>
       <section className="section-block activity-section">
-        <div className="section-heading"><div><p className="eyebrow">TRANSACTION HISTORY</p><h2>Recent activity</h2></div><TextInput label="Search activity" isLabelHidden className="search-field" startIcon={<Icon name="activity" size={17} />} placeholder="Search activity" value={query} onChange={(value) => {
+        <div className="section-heading"><div><p className="eyebrow">TRANSACTION HISTORY</p><h2>Recent activity</h2></div><TextInput label="Search activity" isLabelHidden className="search-field" startIcon={<Icon name="search" size={17} />} placeholder="Search activity" value={query} onChange={(value) => {
           const nextParams = new URLSearchParams(searchParams)
           if (value) nextParams.set('q', value)
           else nextParams.delete('q')
