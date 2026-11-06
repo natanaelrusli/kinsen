@@ -6,7 +6,7 @@ import {
   ChevronRight, ChevronsLeft, ChevronsRight, CircleAlert, CircleCheck,
   Clock, Columns3, Contrast, Copy, Ellipsis, ExternalLink,
   EyeOff, FileText, Funnel, House, Info, Landmark, Menu, Mic, Pencil,
-  Plus, ReceiptText, Search, Settings, Square, Trash2, TriangleAlert,
+  Plus, ReceiptText, Search, Settings, Square, Trash2, TriangleAlert, UserRound,
   Wallet, Wrench, X, Zap, type LucideIcon,
 } from 'lucide-react'
 
@@ -18,6 +18,7 @@ const glyphs = {
   assets: Landmark,
   electricity: Zap,
   wallet: Wallet,
+  account: UserRound,
   settings: Settings,
   plus: Plus,
   arrow: ArrowRight,

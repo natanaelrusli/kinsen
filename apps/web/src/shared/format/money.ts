@@ -29,7 +29,7 @@ export function formatIdr(amount: number): string {
   return idr.format(amount)
 }
 
-function formatCompactIdr(amount: number): string {
+export function formatCompactIdr(amount: number): string {
   const absolute = Math.abs(amount)
   const sign = amount < 0 ? '-' : ''
   if (absolute >= 1_000_000_000) return `${sign}Rp ${(absolute / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M`

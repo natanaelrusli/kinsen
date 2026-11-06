@@ -41,7 +41,7 @@ const destinations: Destination[] = [
   { id: 'electricity', to: '/electricity', label: 'PLN Token Tracker', icon: 'electricity', keywords: ['pln', 'token', 'electricity', 'meter', 'kwh'] },
   { id: 'budget', to: '/budget', label: 'Budget settings', icon: 'wallet', keywords: ['budget', 'categories']},
   { id: 'settings', to: '/settings', label: 'Settings', icon: 'settings', keywords: ['preferences', 'appearance'] },
-  { id: 'account', to: '/account', label: 'Account settings', icon: 'wallet', keywords: ['profile', 'account'] },
+  { id: 'account', to: '/account', label: 'Account settings', icon: 'account', keywords: ['profile', 'account'] },
 ]
 
 const destinationsById = new Map(destinations.map((destination) => [destination.id, destination]))

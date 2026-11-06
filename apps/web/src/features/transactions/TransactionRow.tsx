@@ -23,7 +23,7 @@ export function TransactionRow({ transaction, categoryName, onEdit, onDelete, de
       </Stack>
       {transaction.plannedExpenseId && <span className="linked-badge">Commitment linked</span>}
       <strong className="transaction-amount">−{formatIdr(transaction.amount)}</strong>
-      <Stack as="div" className="row-actions">
+      <Stack as="div" direction="horizontal" className="row-actions">
         <Button label={`Edit ${transaction.description}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${transaction.description}`} onClick={() => onEdit(transaction)} icon={<Icon name="edit" size={17} />} isIconOnly />
         <Button label={`Delete ${transaction.description}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${transaction.description}`} onClick={() => onDelete(transaction)} isDisabled={deleteDisabled} icon={<Icon name="trash" size={17} />} isIconOnly />
       </Stack>
