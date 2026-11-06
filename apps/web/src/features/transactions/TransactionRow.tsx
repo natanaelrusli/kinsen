@@ -1,4 +1,5 @@
 import { Stack } from '@astryxdesign/core/Stack'
+import { Text } from '@astryxdesign/core/Text'
 import { Button } from '@astryxdesign/core/Button'
 import type { Transaction } from '@kinsen/budget-domain'
 import { formatDate } from '../../shared/format/date'
@@ -16,14 +17,14 @@ type TransactionRowProps = {
 export function TransactionRow({ transaction, categoryName, onEdit, onDelete, deleteDisabled = false }: TransactionRowProps) {
   return (
     <article className="transaction-row">
-      <span className="transaction-icon"><Icon name="receipt" size={18} /></span>
-      <Stack as="div" className="transaction-main">
+      <Text type="inherit" className="transaction-icon"><Icon name="receipt" size={18} /></Text>
+      <Stack className="transaction-main">
         <strong>{transaction.description}</strong>
-        <span>{categoryName} <i aria-hidden="true">·</i> {formatDate(transaction.date, { day: 'numeric', month: 'short' })}</span>
+        <Text type="inherit">{categoryName} <i aria-hidden="true">·</i> {formatDate(transaction.date, { day: 'numeric', month: 'short' })}</Text>
       </Stack>
-      {transaction.plannedExpenseId && <span className="linked-badge">Commitment linked</span>}
+      {transaction.plannedExpenseId && <Text type="inherit" className="linked-badge">Commitment linked</Text>}
       <strong className="transaction-amount">−{formatIdr(transaction.amount)}</strong>
-      <Stack as="div" className="row-actions">
+      <Stack direction="horizontal" className="row-actions">
         <Button label={`Edit ${transaction.description}`} className="icon-button" variant="ghost" type="button" aria-label={`Edit ${transaction.description}`} onClick={() => onEdit(transaction)} icon={<Icon name="edit" size={17} />} isIconOnly />
         <Button label={`Delete ${transaction.description}`} className="icon-button danger-icon" variant="destructive" type="button" aria-label={`Delete ${transaction.description}`} onClick={() => onDelete(transaction)} isDisabled={deleteDisabled} icon={<Icon name="trash" size={17} />} isIconOnly />
       </Stack>
