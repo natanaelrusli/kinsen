@@ -36,6 +36,7 @@ const destinations: Destination[] = [
   { id: 'overview', to: '/', label: 'Overview', icon: 'overview', keywords: ['home', 'dashboard'] },
   { id: 'calendar', to: '/calendar', label: 'Calendar', icon: 'calendar', keywords: ['schedule', 'month'] },
   { id: 'commitments', to: '/commitments', label: 'Commitments', icon: 'commitments', keywords: ['bills', 'recurring'] },
+  { id: 'subscriptions', to: '/subscriptions', label: 'Subscriptions', icon: 'commitments', keywords: ['netflix', 'spotify', 'renewals'] },
   { id: 'activity', to: '/activity', label: 'Activity', icon: 'activity', keywords: ['transactions', 'spending'] },
   { id: 'assets', to: '/assets', label: 'Assets', icon: 'assets', keywords: ['accounts', 'net worth'] },
   { id: 'electricity', to: '/electricity', label: 'PLN Token Tracker', icon: 'electricity', keywords: ['pln', 'token', 'electricity', 'meter', 'kwh'] },
@@ -101,7 +102,7 @@ type SidebarSection = {
  * parent with nested children.
  */
 const sidebarSections: [SidebarSection, ...SidebarSection[]] = [
-  { id: 'overview', title: 'Overview', subtitle: 'Daily plan and review', icon: 'overview', destinationIds: ['overview', 'calendar', 'commitments', 'activity'] },
+  { id: 'overview', title: 'Overview', subtitle: 'Daily plan and review', icon: 'overview', destinationIds: ['overview', 'calendar', 'commitments', 'subscriptions', 'activity'] },
   { id: 'portfolio', title: 'Portfolio', subtitle: 'Accounts and token tracking', icon: 'assets', destinationIds: ['assets', 'electricity'] },
   { id: 'manage', title: 'Manage', subtitle: 'Preferences and settings', icon: 'settings', destinationIds: ['settings'] },
 ]

@@ -17,7 +17,7 @@ const plannedExpenseSchema = z.object({
   dueDate: z.string().refine((value) => {
     try { parseDateOnly(value); return true } catch { return false }
   }, 'Enter a valid calendar date.'),
-  cadence: z.enum(['ONCE', 'WEEKLY', 'MONTHLY']),
+  cadence: z.enum(['ONCE', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']),
   endDate: z.string().optional(),
 })
 
@@ -117,6 +117,8 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
                   ...(recurringAllowed ? [
                     { value: 'WEEKLY', label: 'Weekly' },
                     { value: 'MONTHLY', label: 'Monthly' },
+                    { value: 'QUARTERLY', label: 'Quarterly' },
+                    { value: 'YEARLY', label: 'Yearly' },
                   ] : []),
                 ]}
                 className="field"

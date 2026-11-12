@@ -9,6 +9,7 @@ type DialogFormProps = {
   open: boolean
   title: string
   description?: string
+  width?: number | string
   /** Field errors collected from the last submit attempt; rendered as a focusable summary. */
   errorIssues?: readonly FormErrorIssue[]
   /** Non-field error from saving, shown below the sections. */
@@ -31,6 +32,7 @@ export function DialogForm({
   open,
   title,
   description,
+  width,
   errorIssues,
   submitError,
   onClose,
@@ -75,7 +77,7 @@ export function DialogForm({
   }
 
   return (
-    <FormDialog open={open} title={title} description={description} onClose={onClose}>
+    <FormDialog open={open} title={title} description={description} width={width} onClose={onClose}>
       <form ref={formRef} className={className} onSubmit={handleSubmit} noValidate>
         {errorCount > 0 && (
           <section ref={errorSummaryRef} className="form-error" role="alert" aria-labelledby={titleId} tabIndex={-1}>

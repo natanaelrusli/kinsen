@@ -5,8 +5,8 @@ import {
   ChartNoAxesColumnIncreasing, Check, CheckCheck, ChevronDown, ChevronLeft,
   ChevronRight, ChevronsLeft, ChevronsRight, CircleAlert, CircleCheck,
   Clock, Columns3, Contrast, Copy, Ellipsis, ExternalLink,
-  EyeOff, FileText, Funnel, House, Info, Landmark, Menu, Mic, Pencil,
-  Plus, ReceiptText, Search, Settings, Square, Trash2, TriangleAlert, UserRound,
+  EyeOff, FileText, Funnel, House, Info, Landmark, Menu, Mic, Pause, Pencil,
+  Play, Plus, ReceiptText, Search, Settings, Square, Trash2, TriangleAlert, UserRound,
   Wallet, Wrench, X, Zap, type LucideIcon,
 } from 'lucide-react'
 
@@ -29,6 +29,8 @@ const glyphs = {
   trash: Trash2,
   close: X,
   clock: Clock,
+  pause: Pause,
+  play: Play,
   receipt: ReceiptText,
   'arrow-left': ArrowLeft,
   'arrow-right': ArrowRight,

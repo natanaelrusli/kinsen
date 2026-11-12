@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { createSampleSnapshot, type BudgetPeriod, type Category, type DateOnly } from '@kinsen/budget-domain'
 import { parseDateOnly } from '@kinsen/budget-domain/date-only'
@@ -33,7 +33,7 @@ const categorySchema = z.object({
   bucket: z.enum(['FLEXIBLE', 'PLANNED']),
   allocation: nonNegativeAmountSchema,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Choose a valid category color.'),
-  defaultCadence: z.union([z.enum(['WEEKLY', 'MONTHLY']), z.literal('')]).optional(),
+  defaultCadence: z.union([z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']), z.literal('')]).optional(),
 })
 
 type BudgetAllocations = {
@@ -132,6 +132,10 @@ export function BudgetPage() {
   const runMutation = useBudgetStore((state) => state.runMutation)
   const saving = useBudgetStore((state) => state.saving)
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // ?add=scheduled (from the subscription form) opens Categories with a new scheduled row.
+  const [addScheduledOnLoad] = useState(() => searchParams.get('add') === 'scheduled')
+  const pendingScheduledRow = useRef(addScheduledOnLoad)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [categoryToRemove, setCategoryToRemove] = useState<{ index: number; name: string } | null>(null)
   const fallback = useMemo(() => createSampleSnapshot(localToday()), [])
@@ -151,7 +155,11 @@ export function BudgetPage() {
   useEffect(() => {
     if (!snapshot?.period) return
     reset(initialValues(snapshot.period, snapshot.categories))
-  }, [snapshot, reset])
+    if (!pendingScheduledRow.current) return
+    pendingScheduledRow.current = false
+    append({ id: newId('category'), name: '', mode: 'SCHEDULED', bucket: 'PLANNED', allocation: 0, color: palette[snapshot.categories.length % palette.length] ?? '#6C9A8B' })
+    setSearchParams((params) => { params.delete('add'); return params }, { replace: true })
+  }, [snapshot, reset, append, setSearchParams])
   function validateBudgetStep(stepIndex: number, fields: readonly string[]): boolean {
     const form = getValues()
     const stepValues = stepIndex === 0
@@ -208,6 +216,7 @@ export function BudgetPage() {
       {snapshot?.period?.isSample && <aside className="sample-note"><span className="sample-note-mark" aria-hidden="true">i</span><p><strong>Starter budget</strong> — these amounts are examples. Save your own plan to make it yours.</p></aside>}
       <FormWizard
         className="budget-form"
+        initialStep={addScheduledOnLoad ? 2 : 0}
         steps={[
           {
             label: 'Period',
@@ -278,7 +287,7 @@ export function BudgetPage() {
                         <AstryxSelectField control={control} name={`categories.${index}.bucket`} label="Bucket" options={[{ value: 'FLEXIBLE', label: 'Flexible' }, { value: 'PLANNED', label: 'Planned' }]} className="field" />
                         <CurrencyAmountField control={control} name={`categories.${index}.allocation`} label="Allocation" prefix="Rp" className="field" />
                         <AstryxColorField control={control} name={`categories.${index}.color`} label="Color" className="field" />
-                        {values.categories?.[index]?.mode === 'SCHEDULED' && <AstryxSelectField control={control} name={`categories.${index}.defaultCadence`} label="Default repeat" options={[{ value: '', label: 'No default' }, { value: 'WEEKLY', label: 'Weekly' }, { value: 'MONTHLY', label: 'Monthly' }]} className="field default-cadence-field" />}
+                        {values.categories?.[index]?.mode === 'SCHEDULED' && <AstryxSelectField control={control} name={`categories.${index}.defaultCadence`} label="Default repeat" options={[{ value: '', label: 'No default' }, { value: 'WEEKLY', label: 'Weekly' }, { value: 'MONTHLY', label: 'Monthly' }, { value: 'QUARTERLY', label: 'Quarterly' }, { value: 'YEARLY', label: 'Yearly' }]} className="field default-cadence-field" />}
                       </Grid>
                     </article>
                   )
