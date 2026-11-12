@@ -1,11 +1,14 @@
 import type { BudgetHealth, BudgetOverview, BudgetSnapshot, DateOnly, PlannedExpense, PlannedOccurrence, Transaction } from './model.js'
-import { addDays, addMonthsPreservingDay, daysBetweenInclusive, parseDateOnly } from './date.js'
+import { addDays, daysBetweenInclusive, parseDateOnly } from './date.js'
+import { normalizeBudgetSnapshot, subscriptionPlannedExpenses, validateSubscriptions } from './subscriptions.js'
+import { recurrenceDates } from './recurrence.js'
 
 export function validateMoney(value: number, name: string, positive = false): void {
   if (!Number.isSafeInteger(value) || value < (positive ? 1 : 0)) throw new Error(`${name} must be a ${positive ? 'positive' : 'nonnegative'} safe integer`)
 }
 
 export function validateSnapshot(snapshot: BudgetSnapshot): void {
+  snapshot = normalizeBudgetSnapshot(snapshot)
   const ids = <T extends { id: string }>(items: T[], label: string) => {
     const seen = new Set<string>()
     for (const item of items) { if (!item.id || seen.has(item.id)) throw new Error(`Invalid or duplicate ${label} id`); seen.add(item.id) }
@@ -15,7 +18,7 @@ export function validateSnapshot(snapshot: BudgetSnapshot): void {
   ids(snapshot.plannedExpenses, 'planned expense')
   ids(snapshot.transactions, 'transaction')
   if (!snapshot.period) {
-    if (snapshot.categories.length || snapshot.plannedExpenses.length || snapshot.transactions.length) throw new Error('Data requires a budget period')
+    if (snapshot.categories.length || snapshot.plannedExpenses.length || snapshot.transactions.length || snapshot.subscriptions.length) throw new Error('Data requires a budget period')
     return
   }
   const p = snapshot.period
@@ -31,7 +34,9 @@ export function validateSnapshot(snapshot: BudgetSnapshot): void {
     sums[c.bucket] += c.allocation
   }
   if (sums.FLEXIBLE !== p.flexibleAllocation || sums.PLANNED !== p.plannedAllocation) throw new Error('Category allocations must equal bucket allocations')
-  for (const e of snapshot.plannedExpenses) {
+  validateSubscriptions(snapshot)
+  const allExpenses = [...snapshot.plannedExpenses, ...subscriptionPlannedExpenses(snapshot.subscriptions)]
+  for (const e of allExpenses) {
     validateMoney(e.amount, 'Commitment', true); parseDateOnly(e.dueDate)
     if (!categoryIds.has(e.categoryId)) throw new Error('Commitment category does not exist')
     const c = snapshot.categories.find(category => category.id === e.categoryId)!
@@ -44,7 +49,7 @@ export function validateSnapshot(snapshot: BudgetSnapshot): void {
     if (!categoryIds.has(t.categoryId)) throw new Error('Transaction category does not exist')
     if (!!t.plannedExpenseId !== !!t.plannedOccurrenceDate) throw new Error('Planned transaction link requires an occurrence date')
     if (t.plannedExpenseId) {
-      const expense = snapshot.plannedExpenses.find(e => e.id === t.plannedExpenseId)
+      const expense = allExpenses.find(e => e.id === t.plannedExpenseId)
       if (!expense || expense.categoryId !== t.categoryId) throw new Error('Transaction commitment link is invalid')
       parseDateOnly(t.plannedOccurrenceDate!)
     }
@@ -55,24 +60,21 @@ export function generateOccurrences(snapshot: BudgetSnapshot): PlannedOccurrence
   if (!snapshot.period) return []
   const { startDate, endDate } = snapshot.period
   const rows: PlannedOccurrence[] = []
-  for (const e of snapshot.plannedExpenses) {
+  const allExpenses = [...snapshot.plannedExpenses, ...subscriptionPlannedExpenses(snapshot.subscriptions ?? [])]
+  for (const e of allExpenses) {
     const last = e.endDate && e.endDate < endDate ? e.endDate : endDate
     if (!e.cadence) {
       if (e.dueDate >= startDate && e.dueDate <= last) rows.push(makeOccurrence(e, e.dueDate, snapshot.transactions))
       continue
     }
-    const originalDay = parseDateOnly(e.dueDate).day
-    for (let dueDate = e.dueDate; dueDate <= last;) {
-      if (dueDate >= startDate) rows.push(makeOccurrence(e, dueDate, snapshot.transactions))
-      dueDate = e.cadence === 'WEEKLY' ? addDays(dueDate, 7) : addMonthsPreservingDay(dueDate, 1, originalDay)
-    }
+    for (const dueDate of recurrenceDates(e.dueDate, e.cadence, startDate, last)) rows.push(makeOccurrence(e, dueDate, snapshot.transactions))
   }
   return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id))
 }
 function makeOccurrence(e: PlannedExpense, dueDate: DateOnly, transactions: Transaction[]): PlannedOccurrence {
   const linked = transactions.filter(t => t.plannedExpenseId === e.id && t.plannedOccurrenceDate === dueDate)
   const fulfilledAmount = Math.min(e.amount, linked.reduce((sum, t) => sum + t.amount, 0))
-  return { id: `${e.id}:${dueDate}`, plannedExpenseId: e.id, name: e.name, categoryId: e.categoryId, amount: e.amount, dueDate, cadence: e.cadence, fulfilledAmount, outstandingAmount: Math.max(0, e.amount - fulfilledAmount), transactionCount: linked.length }
+  return { id: `${e.id}:${dueDate}`, plannedExpenseId: e.id, ...(e.subscriptionId ? { subscriptionId: e.subscriptionId } : {}), name: e.name, categoryId: e.categoryId, amount: e.amount, dueDate, cadence: e.cadence, fulfilledAmount, outstandingAmount: Math.max(0, e.amount - fulfilledAmount), transactionCount: linked.length }
 }
 
 export function calculateOverview(snapshot: BudgetSnapshot, today: DateOnly): BudgetOverview {

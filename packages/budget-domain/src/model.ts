@@ -6,7 +6,7 @@ export type TransactionId = string
 
 export type BudgetBucket = 'FLEXIBLE' | 'PLANNED'
 export type CategoryMode = 'DAILY' | 'PERIOD' | 'SCHEDULED'
-export type RecurrenceCadence = 'WEEKLY' | 'MONTHLY'
+export type RecurrenceCadence = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
 export type BudgetHealth = 'ON_TRACK' | 'AT_RISK' | 'OVER_BUDGET' | 'ENDED' | 'NOT_STARTED'
 
 export interface BudgetPeriod {
@@ -39,6 +39,7 @@ export interface PlannedExpense {
   dueDate: DateOnly
   cadence: RecurrenceCadence | null
   endDate?: DateOnly
+  subscriptionId?: string
 }
 
 export interface Transaction {
@@ -57,6 +58,38 @@ export interface BudgetSnapshot {
   categories: Category[]
   plannedExpenses: PlannedExpense[]
   transactions: Transaction[]
+  subscriptions?: Subscription[]
+}
+
+export interface SubscriptionNativePrice {
+  currency: string
+  amount: number
+  rateToIdr: number
+}
+
+export interface SubscriptionSegment {
+  id: string
+  categoryId: CategoryId
+  dueDate: DateOnly
+  endDate?: DateOnly
+  cadence: RecurrenceCadence
+  grossAmountIdr: number
+  myShareIdr: number
+  nativePrice?: SubscriptionNativePrice
+}
+
+export interface Subscription {
+  id: string
+  name: string
+  providerId: string
+  plan: string
+  notes: string
+  status: 'ACTIVE' | 'PAUSED' | 'CANCELLED'
+  paidFromAssetId?: string
+  trialEndDate?: DateOnly
+  reminderDays: number
+  segments: SubscriptionSegment[]
+  deletedAt?: DateOnly
 }
 
 export interface PlannedOccurrence {
@@ -70,6 +103,7 @@ export interface PlannedOccurrence {
   fulfilledAmount: number
   outstandingAmount: number
   transactionCount: number
+  subscriptionId?: string
 }
 
 export interface CategorySummary {
