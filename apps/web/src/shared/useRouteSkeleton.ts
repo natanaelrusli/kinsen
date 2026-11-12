@@ -16,6 +16,7 @@ const skeletonRoutes: SkeletonRoute[] = [
   { path: '/', variant: 'overview', label: 'Loading your budget', end: true },
   { path: '/calendar', variant: 'calendar', label: 'Loading your calendar' },
   { path: '/commitments', variant: 'list', label: 'Loading your commitments' },
+  { path: '/subscriptions', variant: 'list', label: 'Loading your subscriptions' },
   { path: '/activity', variant: 'list', label: 'Loading your activity' },
   { path: '/assets', variant: 'assets', label: 'Loading assets saved on this device' },
   { path: '/electricity', variant: 'meter', label: 'Loading meter readings saved on this device' },

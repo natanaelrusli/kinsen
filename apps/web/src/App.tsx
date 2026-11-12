@@ -10,6 +10,7 @@ import { disconnectMcpBridge } from './infrastructure/mcp/browser-bridge'
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
 const CalendarPage = lazy(() => import('./features/calendar/CalendarPage').then(({ CalendarPage }) => ({ default: CalendarPage })))
 const CommitmentsPage = lazy(() => import('./features/commitments/CommitmentsPage').then(({ CommitmentsPage }) => ({ default: CommitmentsPage })))
+const SubscriptionsPage = lazy(() => import('./features/subscriptions/SubscriptionsPage').then(({ SubscriptionsPage }) => ({ default: SubscriptionsPage })))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage').then(({ TransactionsPage }) => ({ default: TransactionsPage })))
 const BudgetPage = lazy(() => import('./features/budget/BudgetPage').then(({ BudgetPage }) => ({ default: BudgetPage })))
 const AssetsPage = lazy(() => import('./features/assets/AssetsPage').then(({ AssetsPage }) => ({ default: AssetsPage })))
@@ -145,6 +146,7 @@ function BudgetApplication() {
             <Route index element={<DashboardPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="commitments" element={<CommitmentsPage />} />
+            <Route path="subscriptions" element={<SubscriptionsPage />} />
             <Route path="activity" element={<TransactionsPage />} />
             <Route path="budget" element={<BudgetPage />} />
             <Route path="assets" element={<AssetsPage />} />

@@ -14,11 +14,13 @@ type FormDialogProps = {
   open: boolean
   title: string
   description?: string
+  /** Preferred surface width; Astryx clamps it to the viewport. Defaults to the Dialog default. */
+  width?: number | string
   onClose: () => void
   children: ReactNode
 }
 
-export function FormDialog({ open, title, description, onClose, children }: FormDialogProps) {
+export function FormDialog({ open, title, description, width, onClose, children }: FormDialogProps) {
   const [dialogOpen, setDialogOpen] = useState(open)
   const [isClosing, setIsClosing] = useState(false)
   const dialogRef = useRef<HTMLDialogElement | null>(null)
@@ -71,6 +73,7 @@ export function FormDialog({ open, title, description, onClose, children }: Form
       ref={dialogRef}
       className={`form-dialog${isClosing ? ' form-dialog-closing' : ''}`}
       isOpen={dialogOpen}
+      width={width}
       onOpenChange={handleOpenChange}
       onAnimationEnd={handleAnimationEnd}
       purpose="form"

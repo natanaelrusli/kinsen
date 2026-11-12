@@ -103,6 +103,7 @@ describe('AppShell navigation', () => {
       'Overview',
       'Calendar',
       'Commitments',
+      'Subscriptions',
       'Activity',
     ])
     expect(rail.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-active', 'true')
@@ -189,6 +190,7 @@ describe('AppShell navigation', () => {
       'Overview',
       'Calendar',
       'Commitments',
+      'Subscriptions',
       'Activity',
     ])
   })

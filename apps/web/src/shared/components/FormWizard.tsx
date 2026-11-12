@@ -21,6 +21,8 @@ type FormWizardProps = {
   onCancel?: () => void
   open?: boolean
   className?: string
+  /** Step to show first, e.g. when a deep link targets a later step. */
+  initialStep?: number
 }
 
 export function FormWizard({
@@ -33,8 +35,9 @@ export function FormWizard({
   onCancel,
   open,
   className,
+  initialStep = 0,
 }: FormWizardProps) {
-  const [activeStep, setActiveStep] = useState(0)
+  const [activeStep, setActiveStep] = useState(initialStep)
   const [invalidSteps, setInvalidSteps] = useState<ReadonlySet<number>>(() => new Set())
   const [isValidating, setIsValidating] = useState(false)
   const validationInFlight = useRef(false)

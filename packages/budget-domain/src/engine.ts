@@ -8,7 +8,9 @@ export function validateMoney(value: number, name: string, positive = false): vo
 }
 
 export function validateSnapshot(snapshot: BudgetSnapshot): void {
-  snapshot = normalizeBudgetSnapshot(snapshot)
+  const normalized = normalizeBudgetSnapshot(snapshot)
+  snapshot = normalized
+  const subscriptions = normalized.subscriptions
   const ids = <T extends { id: string }>(items: T[], label: string) => {
     const seen = new Set<string>()
     for (const item of items) { if (!item.id || seen.has(item.id)) throw new Error(`Invalid or duplicate ${label} id`); seen.add(item.id) }
@@ -18,7 +20,7 @@ export function validateSnapshot(snapshot: BudgetSnapshot): void {
   ids(snapshot.plannedExpenses, 'planned expense')
   ids(snapshot.transactions, 'transaction')
   if (!snapshot.period) {
-    if (snapshot.categories.length || snapshot.plannedExpenses.length || snapshot.transactions.length || snapshot.subscriptions.length) throw new Error('Data requires a budget period')
+    if (snapshot.categories.length || snapshot.plannedExpenses.length || snapshot.transactions.length || subscriptions.length) throw new Error('Data requires a budget period')
     return
   }
   const p = snapshot.period
@@ -35,7 +37,7 @@ export function validateSnapshot(snapshot: BudgetSnapshot): void {
   }
   if (sums.FLEXIBLE !== p.flexibleAllocation || sums.PLANNED !== p.plannedAllocation) throw new Error('Category allocations must equal bucket allocations')
   validateSubscriptions(snapshot)
-  const allExpenses = [...snapshot.plannedExpenses, ...subscriptionPlannedExpenses(snapshot.subscriptions)]
+  const allExpenses = [...snapshot.plannedExpenses, ...subscriptionPlannedExpenses(subscriptions)]
   for (const e of allExpenses) {
     validateMoney(e.amount, 'Commitment', true); parseDateOnly(e.dueDate)
     if (!categoryIds.has(e.categoryId)) throw new Error('Commitment category does not exist')

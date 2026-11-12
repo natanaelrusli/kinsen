@@ -33,6 +33,7 @@ export function normalizeBudgetSnapshot(snapshot: BudgetSnapshot): BudgetSnapsho
 export function subscriptionPlannedExpenses(subscriptions: readonly Subscription[]): PlannedExpense[] {
   const expenses: PlannedExpense[] = []
   for (const subscription of subscriptions) {
+    if (subscription.status !== 'ACTIVE' || subscription.deletedAt) continue
     for (const segment of subscription.segments) {
       if (segment.myShareIdr <= 0) continue
       const id = subscriptionRuleId(subscription.id, segment.id)
