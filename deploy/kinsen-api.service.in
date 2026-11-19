@@ -1,0 +1,22 @@
+[Unit]
+Description=Kinsen API
+After=network.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@APP_DIR@/apps/api
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=@API_PORT@
+Environment=DATABASE_PATH=@DATA_DIR@/kinsen.sqlite
+EnvironmentFile=@APP_DIR@/.env.local
+ExecStart=@NODE@ dist/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=@DATA_DIR@
+
+[Install]
+WantedBy=multi-user.target
