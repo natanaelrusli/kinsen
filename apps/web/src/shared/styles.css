@@ -799,6 +799,7 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .mobile-navigation { display: flex; min-width: 0; border-top: var(--border-width) solid var(--color-border); background: var(--color-background-surface); color: var(--color-text-primary); }
   .mobile-navigation-bar { align-items: stretch; padding: var(--spacing-2) max(var(--spacing-3), env(safe-area-inset-right)) max(var(--spacing-2), env(safe-area-inset-bottom)) max(var(--spacing-3), env(safe-area-inset-left)); }
   .mobile-navigation-item { display: flex; flex: 1; min-width: 0; min-height: var(--spacing-12); height: auto; flex-direction: column; align-items: center; justify-content: center; gap: var(--spacing-1); padding: var(--spacing-1); border-radius: var(--radius-element); color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: var(--text-supporting-leading); text-align: center; text-decoration: none; }
+  .mobile-navigation-add { flex: 0 0 auto; align-self: center; width: var(--spacing-14, 3.5rem); height: var(--spacing-14, 3.5rem); margin: calc(-1 * var(--spacing-5)) var(--spacing-2) 0; border-radius: var(--radius-full); box-shadow: var(--shadow); }
   .mobile-navigation-item svg { width: var(--spacing-5); height: var(--spacing-5); }
   .mobile-navigation-item .astryx-text { min-width: 0; color: inherit; font-size: inherit; line-height: inherit; overflow-wrap: normal; white-space: nowrap; }
   .mobile-navigation-item[aria-current="page"], .mobile-navigation-item[data-active="true"], .mobile-navigation-more[aria-expanded="true"] { background: var(--color-accent-muted); color: var(--color-text-accent); font-weight: var(--font-weight-semibold); }
@@ -839,9 +840,8 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .health-card { min-height: 185px; padding: 19px; }
   .health-icon { margin-bottom: 11px; }
   .health-card h2 { font-size: 22px; }
-  .dashboard-stats { grid-template-columns: 1fr 1fr; gap: 9px; margin: 11px 0; }
+  .dashboard-stats { grid-template-columns: minmax(0, 1fr); gap: 9px; margin: 11px 0; }
   .dashboard-stats .stat-card { min-height: 128px; padding: 14px; }
-  .dashboard-stats .stat-card:first-child { grid-column: span 2; }
   .dashboard-stats .stat-card > strong { font-size: 19px; }
   .dashboard-content-grid { gap: 11px; }
   .section-block { padding: 16px; border-radius: var(--radius-md); }
@@ -872,9 +872,8 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .calendar-actual { background: var(--green); }
   .calendar-planned { background: var(--color-icon-yellow); }
   .day-detail-panel { padding: var(--spacing-4); }
-  .stat-grid.three-stats { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .stat-grid.three-stats { grid-template-columns: minmax(0, 1fr); gap: 9px; }
   .three-stats .stat-card { min-height: 121px; padding: 13px; }
-  .three-stats .stat-card:last-child { grid-column: span 2; min-height: 104px; }
   .stat-card > strong { font-size: 19px; }
   .commitments-section, .activity-section { margin-top: 12px; }
   .commitment-card { padding-block: var(--spacing-2); padding-inline: 0; }
@@ -1064,3 +1063,22 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .electricity-metric-grid { grid-template-columns: minmax(0, 1fr); }
   .electricity-local-note { align-items: flex-start; }
 }
+
+/* Mobile expense bottom sheet: 48px+ touch targets, amount first, sticky save. */
+.expense-sheet { display: flex; flex-direction: column; gap: var(--spacing-4); padding: var(--spacing-4) var(--spacing-4) 0; }
+.expense-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-2); }
+.expense-sheet-empty { display: flex; min-height: var(--spacing-12); align-items: center; justify-content: space-between; gap: var(--spacing-3); padding: 0 var(--spacing-4); border: var(--border-width) dashed var(--color-border); border-radius: var(--radius-element); color: var(--color-text-secondary); font-size: var(--font-size-sm); text-decoration: none; }
+.expense-sheet-empty-action { display: inline-flex; align-items: center; gap: var(--spacing-1); color: var(--color-text-accent); font-weight: var(--font-weight-semibold); }
+.expense-sheet-title { margin: 0; font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); }
+.expense-sheet-amount input { min-height: var(--spacing-14, 3.5rem); font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); }
+.expense-sheet-group { display: flex; flex-direction: column; gap: var(--spacing-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.expense-sheet-group legend { padding: 0; color: var(--color-text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
+.expense-sheet-chips { display: flex; gap: var(--spacing-2); overflow-x: auto; padding-bottom: var(--spacing-1); scroll-snap-type: x proximity; scrollbar-width: none; }
+.expense-sheet-chip { flex: 0 0 auto; min-height: var(--spacing-12); padding: 0 var(--spacing-4); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-full); background: var(--color-background-surface); color: var(--color-text-primary); font: inherit; scroll-snap-align: start; touch-action: manipulation; }
+.expense-sheet-chip[aria-checked="true"] { border-color: var(--color-text-accent); background: var(--color-accent-muted); color: var(--color-text-accent); font-weight: var(--font-weight-semibold); }
+.expense-sheet-chip:active { background: var(--color-background-muted); }
+.expense-sheet-chip:focus-visible { outline: var(--spacing-0-5) solid var(--color-text-accent); outline-offset: var(--spacing-0-5); }
+.expense-sheet-more { align-self: flex-start; min-height: var(--spacing-12); }
+.expense-sheet-actions { margin-top: auto; position: sticky; z-index: 1; bottom: 0; margin: 0 calc(-1 * var(--spacing-4)); padding: var(--spacing-3) var(--spacing-4) max(var(--spacing-3), env(safe-area-inset-bottom)); border-top: var(--border-width) solid var(--color-border); background: var(--color-background-surface); }
+.expense-sheet-save { width: 100%; min-height: var(--spacing-14, 3.5rem); }
+.mobile-date-field { display: flex; flex-direction: column; gap: var(--spacing-2); }

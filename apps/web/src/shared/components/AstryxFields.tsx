@@ -251,9 +251,11 @@ type DateFieldProps<T extends FieldValues> = ControlledFieldProps<T> & {
   min?: string
   max?: string
   onValueChange?: (value: string) => void
+  presentation?: DateInputProps['presentation']
+  format?: DateInputProps['format']
 }
 
-export function AstryxDateField<T extends FieldValues>({ control, name, label, description, isOptional, className, min, max, onValueChange }: DateFieldProps<T>) {
+export function AstryxDateField<T extends FieldValues>({ control, name, label, description, isOptional, className, min, max, onValueChange, presentation = 'native', format = 'system_date' }: DateFieldProps<T>) {
   return <Controller control={control} name={name} render={({ field, fieldState }) => (
     <DateInput
       label={label}
@@ -263,8 +265,8 @@ export function AstryxDateField<T extends FieldValues>({ control, name, label, d
       ref={field.ref}
       min={min as DateInputProps['min']}
       max={max as DateInputProps['max']}
-      presentation="native"
-      format="system_date"
+      presentation={presentation}
+      format={format}
       description={description}
       isOptional={isOptional}
       status={inputStatus(fieldState.error?.message)}

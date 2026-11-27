@@ -21,6 +21,7 @@ import { budgetRepository } from '../../infrastructure/repositories/api-budget-r
 import { setClerkTokenProvider } from '../../infrastructure/api/clerk-token-provider'
 import { Icon, type IconName } from './Icon'
 import { Celebration } from './Celebration'
+import { TransactionForm } from '../../features/transactions/TransactionForm'
 import { SyncConflictBanner } from './SyncConflictBanner'
 import { colorModeOptions, useSettingsStore, type ColorMode } from '../state/settings-store'
 
@@ -262,13 +263,30 @@ export function AppSidebar() {
   )
 }
 
-const mobilePrimaryIds: Record<string, true | undefined> = { overview: true, calendar: true, activity: true, assets: true }
+const mobilePrimaryIds: Record<string, true | undefined> = { overview: true, activity: true, assets: true }
 const mobilePrimaryDestinations = destinations.filter((destination) => mobilePrimaryIds[destination.id])
 const mobileSecondaryDestinations = destinations.filter((destination) => !mobilePrimaryIds[destination.id])
+// The centered "New expense" button sits between these two groups, so More stays the fifth slot.
+const mobileNavSplit = 2
+
+function MobileNavItem({ destination, pathname }: { destination: Destination; pathname: string }) {
+  return (
+    <Link
+      href={destination.to}
+      className="mobile-navigation-item"
+      aria-current={routeMatches(pathname, destination.to, destination.to === '/') ? 'page' : undefined}>
+      <Icon name={destination.icon} aria-hidden="true" />
+      <Text type="supporting">{destination.label}</Text>
+    </Link>
+  )
+}
 
 function MobileNavigation() {
   const { pathname } = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [expenseOpen, setExpenseOpen] = useState(false)
+  // Mounted on first use and then kept, so the sheet can play its slide-out transition on close.
+  const [expenseMounted, setExpenseMounted] = useState(false)
   const navigationRef = useRef<HTMLElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const secondaryActive = mobileSecondaryDestinations.some((destination) => routeMatches(pathname, destination.to))
@@ -318,16 +336,15 @@ function MobileNavigation() {
         </Stack>
       )}
       <Stack direction="horizontal" className="mobile-navigation-bar" gap={2}>
-        {mobilePrimaryDestinations.map((destination) => (
-          <Link
-            key={destination.id}
-            href={destination.to}
-            className="mobile-navigation-item"
-            aria-current={routeMatches(pathname, destination.to, destination.to === '/') ? 'page' : undefined}>
-            <Icon name={destination.icon} aria-hidden="true" />
-            <Text type="supporting">{destination.label}</Text>
-          </Link>
-        ))}
+        {mobilePrimaryDestinations.slice(0, mobileNavSplit).map((destination) => <MobileNavItem key={destination.id} destination={destination} pathname={pathname} />)}
+        <IconButton
+          label="New expense"
+          variant="primary"
+          className="mobile-navigation-add"
+          icon={<Icon name="plus" size={24} aria-hidden="true" />}
+          onClick={() => { setMoreOpen(false); setExpenseMounted(true); setExpenseOpen(true) }}
+        />
+        {mobilePrimaryDestinations.slice(mobileNavSplit).map((destination) => <MobileNavItem key={destination.id} destination={destination} pathname={pathname} />)}
         <Button
           ref={moreButtonRef}
           label="More"
@@ -341,6 +358,7 @@ function MobileNavigation() {
           More
         </Button>
       </Stack>
+      {expenseMounted && <TransactionForm open={expenseOpen} onClose={() => setExpenseOpen(false)} />}
     </Stack>
   )
 }
