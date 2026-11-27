@@ -229,6 +229,27 @@ describe('AppShell navigation', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false')
     expect(more).toHaveFocus()
   })
+  it('places New expense between the primary destinations in the mobile bar', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <LinkProvider component={RouterLink}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<h1>Overview page</h1>} />
+            </Route>
+          </Routes>
+        </LinkProvider>
+      </MemoryRouter>,
+    )
+
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }))
+    const labels = navigation.getAllByRole('link').map((link) => link.textContent)
+    expect(labels).toEqual(['Overview', 'Activity', 'Assets'])
+    const add = navigation.getByRole('button', { name: 'New expense' })
+    const bar = add.parentElement!
+    expect(Array.from(bar.children).indexOf(add)).toBe(2)
+    expect(bar.children).toHaveLength(5)
+  })
   it('offers the PLN tracker in More and marks its status as local-only', async () => {
     const user = userEvent.setup()
     render(

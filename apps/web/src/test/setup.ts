@@ -24,3 +24,7 @@ if (dialogPrototype && typeof dialogPrototype.close !== 'function') {
     this.removeAttribute('open')
   }
 }
+
+if (typeof window.ResizeObserver !== 'function') {
+  window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+}
