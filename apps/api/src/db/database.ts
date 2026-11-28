@@ -56,7 +56,9 @@ const schemaV2 = `
 const schemaV3 = `
   ALTER TABLE app_owner ADD COLUMN data_generation INTEGER NOT NULL DEFAULT 0 CHECK (data_generation >= 0);
 `
-
+const schemaV4 = `
+  ALTER TABLE categories ADD COLUMN icon TEXT;
+`
 
 export function migrateDatabase(database: DatabaseSync): void {
   database.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)')
@@ -69,6 +71,10 @@ export function migrateDatabase(database: DatabaseSync): void {
   if (version < 2) applyMigration(database, 2, schemaV2)
 
   if (version < 3) applyMigration(database, 3, schemaV3)
+  if (version < 4) {
+    const hasIcon = database.prepare("SELECT 1 FROM pragma_table_info('categories') WHERE name = 'icon'").get()
+    applyMigration(database, 4, hasIcon ? '' : schemaV4)
+  }
 }
 
 function applyMigration(database: DatabaseSync, version: number, schema: string): void {

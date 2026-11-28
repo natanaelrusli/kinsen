@@ -27,6 +27,8 @@ export interface Category {
   bucket: BudgetBucket
   allocation: number
   color: string
+  /** Key of a glyph from the web app's category icon set; unset categories show a color dot. */
+  icon?: string
   defaultCadence?: RecurrenceCadence
 }
 

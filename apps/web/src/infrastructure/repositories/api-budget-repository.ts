@@ -468,7 +468,7 @@ function canonicalSnapshot(snapshot: BudgetSnapshot): unknown[] {
       Boolean(snapshot.period.isSample),
     ],
     [...snapshot.categories].sort((a, b) => a.id.localeCompare(b.id)).map((item) => [
-      item.id, item.name, item.mode, item.bucket, item.allocation, item.color, item.defaultCadence ?? null,
+      item.id, item.name, item.mode, item.bucket, item.allocation, item.color, item.icon ?? null, item.defaultCadence ?? null,
     ]),
     [...snapshot.plannedExpenses].sort((a, b) => a.id.localeCompare(b.id)).map((item) => [
       item.id, item.name, item.categoryId, item.amount, item.dueDate, item.cadence, item.endDate ?? null,

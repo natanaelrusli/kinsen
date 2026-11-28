@@ -4,6 +4,8 @@ import { Button } from '@astryxdesign/core/Button'
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog'
 import { Stack } from '@astryxdesign/core/Stack'
 import { Step, Stepper } from '@astryxdesign/core/Stepper'
+import { useIsMobile } from '../hooks/use-is-mobile'
+import { FormSheet } from './FormSheet'
 
 type FormWizardStep = {
   label: string
@@ -210,7 +212,17 @@ type FormWizardDialogProps = Omit<FormWizardProps, 'open' | 'onCancel'> & {
   onClose: () => void
 }
 
+/** A centered dialog on desktop and a bottom sheet on mobile. */
 export function FormWizardDialog({ open, title, description, onClose, ...wizard }: FormWizardDialogProps) {
+  const isMobile = useIsMobile()
+  if (isMobile) {
+    return (
+      <FormSheet open={open} title={title} description={description} onClose={onClose}>
+        <FormWizard {...wizard} open={open} onCancel={onClose} />
+      </FormSheet>
+    )
+  }
+
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) onClose()
   }

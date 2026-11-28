@@ -14,7 +14,7 @@ type ConfirmationDialogProps = {
 
 export function ConfirmationDialog({ open, title, description, confirmLabel, onClose, onConfirm, isConfirmDisabled = false }: ConfirmationDialogProps) {
   return (
-    <FormDialog open={open} title={title} description={description} onClose={onClose}>
+    <FormDialog open={open} title={title} description={description} mobileHeight="hug" onClose={onClose}>
       <Stack className="form-actions" direction="horizontal" justify="end" gap={2}>
         <Button label="Cancel" variant="ghost" className="button button-outline" type="button" onClick={onClose} />
         <Button label={confirmLabel} variant="destructive" className="button button-danger" type="button" onClick={onConfirm} isDisabled={isConfirmDisabled} />

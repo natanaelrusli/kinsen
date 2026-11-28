@@ -24,6 +24,7 @@ import { useSettingsStore } from '../../shared/state/settings-store'
 
 import { useGoldPriceRefresh } from '../assets/useGoldPriceRefresh'
 import { GoldValueStatus, valuationOrder } from '../assets/GoldValueDetails'
+import { CategoryIcon } from '../../shared/components/CategoryIcon'
 const healthCopy = {
   ON_TRACK: { label: 'On track', detail: 'Your reserve and current plans fit inside this period.', icon: 'check' as const },
   AT_RISK: { label: 'Needs attention', detail: 'Spending and unpaid commitments are using protected room.', icon: 'warning' as const },
@@ -107,7 +108,7 @@ export function DashboardPage() {
           <div className="section-heading"><div><p className="eyebrow">WHERE IT GOES</p><h2 id="category-pulse-title">Category pulse</h2></div><Link className="text-link" color="inherit" href="/budget">Edit allocations <Icon name="arrow" size={15} /></Link></div>
           {overview.categorySummaries.length === 0 ? <EmptyState className="empty-state" icon={<span className="empty-icon"><Icon name="wallet" size={23} /></span>} title="Add your categories" description="Set flexible and planned categories to give your budget structure." actions={<Button label="Set up budget" className="button button-secondary" variant="secondary" href="/budget" />} /> : <div className="category-pulse-list">
             {overview.categorySummaries.map(({ category, spent, committed, remainingAllocation, overspent }) => <article className="category-pulse" key={category.id}>
-              <div className="category-pulse-heading"><span className="category-color-chip" style={{ backgroundColor: category.color }} /><div><strong>{category.name}</strong><span>{category.mode === 'DAILY' ? 'Daily' : category.mode === 'PERIOD' ? 'Period' : 'Scheduled'} · {category.bucket.toLowerCase()}</span></div><strong className={overspent ? 'money-danger' : ''}>{formatIdr(spent)}</strong></div>
+              <div className="category-pulse-heading"><CategoryIcon icon={category.icon} color={category.color} /><div><strong>{category.name}</strong><span>{category.mode === 'DAILY' ? 'Daily' : category.mode === 'PERIOD' ? 'Period' : 'Scheduled'} · {category.bucket.toLowerCase()}</span></div><strong className={overspent ? 'money-danger' : ''}>{formatIdr(spent)}</strong></div>
               <ProgressBar className="app-progress-bar" value={category.allocation ? spent / category.allocation * 100 : spent > 0 ? 100 : 0} label={`${category.name} allocation used`} style={{'--color-accent': overspent ? 'var(--rust)' : category.color} as CSSProperties} isLabelHidden />
               <div className="category-pulse-footer"><span>{overspent ? `Over allocation by ${formatIdr(-remainingAllocation)}` : `${formatIdr(Math.max(0, remainingAllocation))} allocation left`}</span>{committed > 0 && <span>{formatIdr(committed)} committed</span>}</div>
             </article>)}

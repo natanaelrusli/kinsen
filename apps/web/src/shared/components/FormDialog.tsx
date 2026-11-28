@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent, type ReactNode } from 'react'
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog'
+import { useIsMobile } from '../hooks/use-is-mobile'
+import { FormSheet } from './FormSheet'
 
 const EXIT_ANIMATION_NAME = 'form-dialog-exit'
 
@@ -16,11 +18,27 @@ type FormDialogProps = {
   description?: string
   /** Preferred surface width; Astryx clamps it to the viewport. Defaults to the Dialog default. */
   width?: number | string
+  /** Mobile sheet height: 'tall' for forms, 'hug' for short confirmations. */
+  mobileHeight?: 'hug' | 'tall'
   onClose: () => void
   children: ReactNode
 }
 
-export function FormDialog({ open, title, description, width, onClose, children }: FormDialogProps) {
+/** A centered dialog on desktop and a bottom sheet on mobile. */
+export function FormDialog({ mobileHeight = 'tall', ...props }: FormDialogProps) {
+  const isMobile = useIsMobile()
+  if (isMobile) {
+    const { open, title, description, onClose, children } = props
+    return (
+      <FormSheet open={open} title={title} description={description} height={mobileHeight} purpose={mobileHeight === 'hug' ? 'info' : 'form'} onClose={onClose}>
+        {children}
+      </FormSheet>
+    )
+  }
+  return <DesktopFormDialog {...props} />
+}
+
+function DesktopFormDialog({ open, title, description, width, onClose, children }: Omit<FormDialogProps, 'mobileHeight'>) {
   const [dialogOpen, setDialogOpen] = useState(open)
   const [isClosing, setIsClosing] = useState(false)
   const dialogRef = useRef<HTMLDialogElement | null>(null)

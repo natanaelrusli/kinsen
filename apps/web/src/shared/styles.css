@@ -1091,3 +1091,36 @@ a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .expense-sheet-actions { margin-top: auto; position: sticky; z-index: 1; bottom: 0; margin: 0 calc(-1 * var(--spacing-4)); padding: var(--spacing-3) var(--spacing-4) max(var(--spacing-3), env(safe-area-inset-bottom)); border-top: var(--border-width) solid var(--color-border); background: var(--color-background-surface); }
 .expense-sheet-save { width: 100%; min-height: var(--spacing-14, 3.5rem); }
 .mobile-date-field { display: flex; flex-direction: column; gap: var(--spacing-2); }
+
+/* Mobile form sheets (FormSheet): the sheet's content area scrolls, so the form
+   inside stops scrolling itself and its actions stick to the sheet's bottom edge. */
+.form-sheet { padding: var(--spacing-4) var(--spacing-4) 0; }
+.form-sheet-header > :first-child { min-width: 0; }
+.form-sheet-title { margin: 0; font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); }
+.form-sheet-description { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.form-sheet .form-stack { overflow: visible; }
+.form-sheet .form-wizard-body { max-height: none; overflow: visible; }
+.form-sheet .form-actions { margin-inline: calc(-1 * var(--spacing-4)); padding: var(--spacing-3) var(--spacing-4) max(var(--spacing-3), env(safe-area-inset-bottom)); background: var(--color-background-surface); }
+.form-sheet .form-actions .button { flex: 1; min-height: var(--spacing-12); }
+.form-sheet .form-wizard-actions .form-wizard-navigation { flex: 0 0 auto; }
+.form-sheet .form-wizard-actions .form-wizard-primary { flex: 1 1 auto; }
+
+/* New-version notice (UpdatePrompt): a corner card on desktop, a top banner on mobile. */
+.update-notice { position: fixed; z-index: 30; right: max(var(--spacing-4), env(safe-area-inset-right)); bottom: max(var(--spacing-4), env(safe-area-inset-bottom)); width: calc(100vw - var(--spacing-8)); }
+.update-notice-text { min-width: 0; flex: 1; }
+.update-notice-text span { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+@media (max-width: 1023.98px) {
+  .update-notice { top: calc(var(--spacing-3) + env(safe-area-inset-top)); bottom: auto; left: var(--spacing-4); right: var(--spacing-4); margin-inline: auto; }
+}
+
+/* Category icons: tinted tile for chosen glyphs, picker grid in Budget settings. */
+.category-icon-tile { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: var(--radius-element); }
+.category-icon-picker { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
+.category-icon-picker legend { padding: 0 0 var(--spacing-2); color: var(--color-text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
+.category-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--spacing-11), 1fr)); gap: var(--spacing-1); }
+.category-icon-option { display: inline-flex; align-items: center; justify-content: center; min-height: var(--spacing-11); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); background: var(--color-background-surface); color: var(--color-text-secondary); touch-action: manipulation; }
+.category-icon-option[aria-checked="true"] { border-color: var(--color-text-accent); background: var(--color-accent-muted); color: var(--color-text-accent); }
+.category-icon-option:focus-visible { outline: var(--spacing-0-5) solid var(--color-text-accent); outline-offset: var(--spacing-0-5); }
+.expense-sheet-chip { display: inline-flex; align-items: center; gap: var(--spacing-2); }
+.new-recurring-type { padding: var(--spacing-3); border: var(--border-width) dashed var(--color-border); border-radius: var(--radius-element); }
+.new-recurring-type-trigger { align-self: flex-start; }

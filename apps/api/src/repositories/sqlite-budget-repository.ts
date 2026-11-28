@@ -34,6 +34,7 @@ type CategoryRow = {
   bucket: Category['bucket']
   allocation: number
   color: string
+  icon: string | null
   default_cadence: Category['defaultCadence'] | null
 }
 
@@ -74,6 +75,7 @@ export class SqliteBudgetRepository {
       bucket: row.bucket,
       allocation: row.allocation,
       color: row.color,
+      ...(row.icon ? { icon: row.icon } : {}),
       ...(row.default_cadence ? { defaultCadence: row.default_cadence } : {}),
     }))
     const plannedExpenses = (this.database.prepare('SELECT * FROM planned_expenses ORDER BY id').all() as PlannedExpenseRow[]).map((row): PlannedExpense => ({
@@ -177,13 +179,13 @@ export class SqliteBudgetRepository {
     this.inTransaction(() => {
       this.insertPeriod(period)
       const upsert = this.database.prepare(`
-        INSERT INTO categories (id, name, mode, bucket, allocation, color, default_cadence)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO categories (id, name, mode, bucket, allocation, color, icon, default_cadence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET name=excluded.name, mode=excluded.mode, bucket=excluded.bucket,
-          allocation=excluded.allocation, color=excluded.color, default_cadence=excluded.default_cadence
+          allocation=excluded.allocation, color=excluded.color, icon=excluded.icon, default_cadence=excluded.default_cadence
       `)
       for (const category of categories) {
-        upsert.run(category.id, category.name, category.mode, category.bucket, category.allocation, category.color, category.defaultCadence ?? null)
+        upsert.run(category.id, category.name, category.mode, category.bucket, category.allocation, category.color, category.icon ?? null, category.defaultCadence ?? null)
       }
       const ids = categories.map((category) => category.id)
       this.database.prepare(`DELETE FROM categories WHERE id NOT IN (${ids.map(() => '?').join(', ')})`).run(...ids)
@@ -232,9 +234,9 @@ export class SqliteBudgetRepository {
     this.database.prepare('DELETE FROM budget_period').run()
     if (snapshot.period) this.insertPeriod(snapshot.period)
 
-    const insertCategory = this.database.prepare('INSERT INTO categories (id, name, mode, bucket, allocation, color, default_cadence) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    const insertCategory = this.database.prepare('INSERT INTO categories (id, name, mode, bucket, allocation, color, icon, default_cadence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     for (const category of snapshot.categories) {
-      insertCategory.run(category.id, category.name, category.mode, category.bucket, category.allocation, category.color, category.defaultCadence ?? null)
+      insertCategory.run(category.id, category.name, category.mode, category.bucket, category.allocation, category.color, category.icon ?? null, category.defaultCadence ?? null)
     }
     const insertPlannedExpense = this.database.prepare('INSERT INTO planned_expenses (id, name, category_id, amount, due_date, cadence, end_date) VALUES (?, ?, ?, ?, ?, ?, ?)')
     for (const expense of snapshot.plannedExpenses) {
@@ -294,7 +296,7 @@ function canonicalSnapshot(snapshot: BudgetSnapshot): unknown[] {
       Boolean(snapshot.period.isSample),
     ],
     [...snapshot.categories].sort((a, b) => a.id.localeCompare(b.id)).map((item) => [
-      item.id, item.name, item.mode, item.bucket, item.allocation, item.color, item.defaultCadence ?? null,
+      item.id, item.name, item.mode, item.bucket, item.allocation, item.color, item.icon ?? null, item.defaultCadence ?? null,
     ]),
     [...snapshot.plannedExpenses].sort((a, b) => a.id.localeCompare(b.id)).map((item) => [
       item.id, item.name, item.categoryId, item.amount, item.dueDate, item.cadence, item.endDate ?? null,

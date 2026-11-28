@@ -6,6 +6,7 @@ import { useBudgetStore } from '../../shared/state/budget-store'
 import { useAssetStore } from '../../shared/state/asset-store'
 import { useElectricityStore } from '../../shared/state/electricity-store'
 import { localToday } from '../../shared/format/date'
+import { randomUUID } from '../../shared/format/id'
 
 // Only provider responses can create automatic gold provenance; tool input cannot forge it.
 async function quotedValuation(asset: AssetAccount): Promise<AssetValuation> {
@@ -15,7 +16,7 @@ async function quotedValuation(asset: AssetAccount): Promise<AssetValuation> {
   const quote = catalog.quotes.find(item => item.source === holding.source && item.materialType === holding.materialType &&
     item.weightGrams === holding.weightGrams && item.lineKey === holding.lineKey)
   if (!quote) throw new Error('The selected gold product is unavailable. No holding was saved.')
-  return createGoldValuation(asset, quote, localToday(), Date.now(), `valuation-${crypto.randomUUID()}`)
+  return createGoldValuation(asset, quote, localToday(), Date.now(), `valuation-${randomUUID()}`)
 }
 
 /** Runs only inside the explicitly paired, signed-in app; preserves existing use-case invariants and outbox. */
