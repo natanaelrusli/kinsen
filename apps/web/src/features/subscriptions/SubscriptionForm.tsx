@@ -13,6 +13,7 @@ import { AstryxDateField, AstryxSelectField, AstryxTextField, CurrencyAmountFiel
 import { Icon } from '../../shared/components/Icon'
 import { formatIdr } from '../../shared/format/money'
 import { useBudgetStore } from '../../shared/state/budget-store'
+import { randomUUID } from '../../shared/format/id'
 
 const providers = ['Netflix', 'PlayStation Plus', 'Disney+', 'Spotify', 'YouTube Premium', 'iCloud', 'ChatGPT', 'Custom']
 const cadences = [{ value: 'MONTHLY', label: 'Monthly', perYear: 12 }, { value: 'QUARTERLY', label: 'Quarterly', perYear: 4 }, { value: 'YEARLY', label: 'Yearly', perYear: 1 }] as const
@@ -52,8 +53,8 @@ export function SubscriptionForm({ open, onClose, onSave }: SubscriptionFormProp
   const onSubmit = handleSubmit((values) => {
     if (!category) return
     onSave({
-      id: crypto.randomUUID(), name: values.name.trim(), providerId: values.provider.toLowerCase().replaceAll(' ', '-'), plan: '', notes: '', status: 'ACTIVE', reminderDays: 3,
-      segments: [{ id: crypto.randomUUID(), categoryId: category.id, dueDate: values.renewal, cadence: values.cadence, grossAmountIdr: values.price, myShareIdr: values.price }],
+      id: randomUUID(), name: values.name.trim(), providerId: values.provider.toLowerCase().replaceAll(' ', '-'), plan: '', notes: '', status: 'ACTIVE', reminderDays: 3,
+      segments: [{ id: randomUUID(), categoryId: category.id, dueDate: values.renewal, cadence: values.cadence, grossAmountIdr: values.price, myShareIdr: values.price }],
     })
     reset(defaultValues)
     onClose()

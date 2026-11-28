@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { PlannedExpense } from '@kinsen/budget-domain'
 import { parseDateOnly } from '@kinsen/budget-domain/date-only'
 import { newId } from '../../shared/format/id'
+import { NewRecurringType } from './NewRecurringType'
 import { FormWizardDialog } from '../../shared/components/FormWizard'
 import { Stack } from '@astryxdesign/core/Stack'
 import { CurrencyAmountField, AstryxDateField, AstryxSelectField, AstryxTextField } from '../../shared/components/AstryxFields'
@@ -98,6 +99,13 @@ export function PlannedExpenseForm({ open, initial = null, onClose }: PlannedExp
                   }
                 }}
                 className="field"
+              />
+              <NewRecurringType
+                existingNames={(snapshot?.categories ?? []).map((category) => category.name)}
+                onCreated={(category) => {
+                  setValue('categoryId', category.id, { shouldValidate: true })
+                  setValue('cadence', category.defaultCadence ?? 'MONTHLY', { shouldValidate: true })
+                }}
               />
             </Stack>
           </>,

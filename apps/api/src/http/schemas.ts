@@ -30,6 +30,7 @@ export const categorySchema = z.object({
   bucket: z.enum(['FLEXIBLE', 'PLANNED']),
   allocation: amount,
   color: z.string().regex(/^#[\da-fA-F]{6}$/),
+  icon: z.string().regex(/^[a-z0-9-]{1,32}$/).optional(),
   defaultCadence: z.enum(['WEEKLY', 'MONTHLY']).optional(),
 }).strict()
 

@@ -11,7 +11,7 @@ const date = z.string().refine(value => {
 }, 'Use a valid YYYY-MM-DD calendar date.')
 const category = z.strictObject({
   id, name: text, mode: z.enum(['DAILY', 'PERIOD', 'SCHEDULED']), bucket: z.enum(['FLEXIBLE', 'PLANNED']),
-  allocation: amount, color: text, defaultCadence: z.enum(['WEEKLY', 'MONTHLY']).optional(),
+  allocation: amount, color: text, icon: z.string().regex(/^[a-z0-9-]{1,32}$/).optional(), defaultCadence: z.enum(['WEEKLY', 'MONTHLY']).optional(),
 })
 const period = z.strictObject({
   id, totalAmount: amount, reserveAmount: amount, flexibleAllocation: amount, plannedAllocation: amount,

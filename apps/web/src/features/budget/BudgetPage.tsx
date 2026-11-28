@@ -15,6 +15,7 @@ import { LoadErrorState, PageHeader } from '../../shared/components/Primitives'
 import { PageSkeleton } from '../../shared/components/PageSkeleton'
 import { Grid } from '@astryxdesign/core/Grid'
 import { Stack } from '@astryxdesign/core/Stack'
+import { CategoryIcon, CategoryIconField } from '../../shared/components/CategoryIcon'
 import { FormWizard } from '../../shared/components/FormWizard'
 import { useBudgetStore } from '../../shared/state/budget-store'
 import { ConfirmationDialog } from '../../shared/components/ConfirmationDialog'
@@ -33,6 +34,7 @@ const categorySchema = z.object({
   bucket: z.enum(['FLEXIBLE', 'PLANNED']),
   allocation: nonNegativeAmountSchema,
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Choose a valid category color.'),
+  icon: z.string().optional(),
   defaultCadence: z.union([z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']), z.literal('')]).optional(),
 })
 
@@ -109,8 +111,8 @@ type BudgetFormValues = z.infer<typeof budgetSchema>
 const palette = ['#E9A23B', '#5D8AA8', '#9B7EBD', '#6C9A8B', '#D17B88', '#D6A756', '#547C66']
 
 function categoryFromForm(value: BudgetFormValues['categories'][number]): Category {
-  const { defaultCadence, ...category } = value
-  return { ...category, ...(defaultCadence ? { defaultCadence } : {}) }
+  const { defaultCadence, icon, ...category } = value
+  return { ...category, ...(icon ? { icon } : {}), ...(defaultCadence ? { defaultCadence } : {}) }
 }
 
 function initialValues(period: BudgetPeriod, categories: Category[]): BudgetFormValues {
@@ -121,7 +123,7 @@ function initialValues(period: BudgetPeriod, categories: Category[]): BudgetForm
     plannedAllocation: period.plannedAllocation,
     startDate: period.startDate,
     endDate: period.endDate,
-    categories: categories.map((category) => ({ ...category, defaultCadence: category.defaultCadence ?? '' })),
+    categories: categories.map((category) => ({ ...category, icon: category.icon ?? '', defaultCadence: category.defaultCadence ?? '' })),
   }
 }
 
@@ -270,7 +272,7 @@ export function BudgetPage() {
                   <h2 id="budget-categories-title">Plan your buckets</h2>
                   <p>Category amounts must add up to their bucket. Daily categories are flexible; scheduled categories are planned.</p>
                 </Stack>
-                <Button className="button button-secondary" label="Add category" variant="secondary" type="button" icon={<Icon name="plus" size={17} />} onClick={() => append({ id: newId('category'), name: '', mode: 'PERIOD', bucket: 'FLEXIBLE', allocation: 0, color: palette[fields.length % palette.length] ?? '#6C9A8B' })} />
+                <Button className="button button-secondary" label="Add category" variant="secondary" type="button" icon={<Icon name="plus" size={17} />} onClick={() => append({ id: newId('category'), name: '', mode: 'PERIOD', bucket: 'FLEXIBLE', allocation: 0, color: palette[fields.length % palette.length] ?? '#6C9A8B', icon: '' })} />
               </Stack>
               <Grid className="category-editor-list" columns={{ minWidth: 320, max: 2 }} gap={3}>
                 {fields.map((field, index) => {
@@ -278,7 +280,7 @@ export function BudgetPage() {
                   return (
                     <article className="category-editor" key={field.fieldKey}>
                       <Stack className="category-editor-top" direction="horizontal" align="center" gap={2}>
-                        <span className="category-color-chip" style={{ backgroundColor: values.categories?.[index]?.color ?? field.color }} />
+                        <CategoryIcon icon={values.categories?.[index]?.icon} color={values.categories?.[index]?.color ?? field.color} />
                         <AstryxTextField control={control} name={`categories.${index}.name`} label="Category name" isLabelHidden maxLength={40} className="field category-name-field" />
                         <Button className="icon-button danger-icon" label={`Remove ${values.categories?.[index]?.name || 'category'}`} isIconOnly icon={<Icon name="trash" size={17} />} variant="destructive" type="button" isDisabled={used || fields.length === 1} tooltip={used ? 'This category has saved activity and cannot be removed.' : 'Remove category'} onClick={() => setCategoryToRemove({ index, name: values.categories?.[index]?.name || 'category' })} />
                       </Stack>
@@ -287,6 +289,7 @@ export function BudgetPage() {
                         <AstryxSelectField control={control} name={`categories.${index}.bucket`} label="Bucket" options={[{ value: 'FLEXIBLE', label: 'Flexible' }, { value: 'PLANNED', label: 'Planned' }]} className="field" />
                         <CurrencyAmountField control={control} name={`categories.${index}.allocation`} label="Allocation" prefix="Rp" className="field" />
                         <AstryxColorField control={control} name={`categories.${index}.color`} label="Color" className="field" />
+                        <CategoryIconField control={control} name={`categories.${index}.icon`} />
                         {values.categories?.[index]?.mode === 'SCHEDULED' && <AstryxSelectField control={control} name={`categories.${index}.defaultCadence`} label="Default repeat" options={[{ value: '', label: 'No default' }, { value: 'WEEKLY', label: 'Weekly' }, { value: 'MONTHLY', label: 'Monthly' }, { value: 'QUARTERLY', label: 'Quarterly' }, { value: 'YEARLY', label: 'Yearly' }]} className="field default-cadence-field" />}
                       </Grid>
                     </article>

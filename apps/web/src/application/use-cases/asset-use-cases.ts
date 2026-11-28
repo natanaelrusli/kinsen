@@ -3,6 +3,7 @@ import { validateAssetData } from '@kinsen/budget-domain'
 import type { AssetRepository, AssetOpeningRecord } from '../../infrastructure/repositories/asset-repository'
 import { matchesCurrentGoldHolding } from '../../infrastructure/repositories/asset-repository'
 import { localToday } from '../../shared/format/date'
+import { randomUUID } from '../../shared/format/id'
 
 export class AssetUseCases {
   constructor(private readonly repository: AssetRepository) {}
@@ -53,9 +54,9 @@ export class AssetUseCases {
     if (input.sourceAssetId === input.destinationAssetId) throw new Error('Choose two different accounts for a transfer.')
     if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) throw new Error('Transfer amount must be a positive whole-rupiah value.')
     const data = await this.getData()
-    const transferId = `transfer-${crypto.randomUUID()}`
+    const transferId = `transfer-${randomUUID()}`
     const sourceEntry: AssetEntry = {
-      id: `asset-entry-${crypto.randomUUID()}`,
+      id: `asset-entry-${randomUUID()}`,
       assetId: input.sourceAssetId,
       date: input.date,
       kind: 'TRANSFER_OUT',
@@ -64,7 +65,7 @@ export class AssetUseCases {
       ...(input.note ? { note: input.note } : {}),
     }
     const destinationEntry: AssetEntry = {
-      id: `asset-entry-${crypto.randomUUID()}`,
+      id: `asset-entry-${randomUUID()}`,
       assetId: input.destinationAssetId,
       date: input.date,
       kind: 'TRANSFER_IN',
@@ -105,8 +106,8 @@ export class AssetUseCases {
   async payLiability(input: { liabilityId: string; assetId: string; amountMinor: number; date: DateOnly; note?: string }): Promise<void> {
     if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) throw new Error('Payment amount must be a positive whole-rupiah value.')
     const data = await this.getData()
-    const assetEntryId = `asset-entry-${crypto.randomUUID()}`
-    const liabilityEntryId = `liability-entry-${crypto.randomUUID()}`
+    const assetEntryId = `asset-entry-${randomUUID()}`
+    const liabilityEntryId = `liability-entry-${randomUUID()}`
     const assetEntry: AssetEntry = {
       id: assetEntryId,
       assetId: input.assetId,

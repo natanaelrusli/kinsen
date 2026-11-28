@@ -16,6 +16,12 @@ export class BudgetUseCases {
     validateSnapshot(snapshot)
     await this.repository.saveBudget(period, categories)
   }
+  /** Adds one category without touching the period or other categories (callers keep its allocation at 0 so bucket totals still match). */
+  async addCategory(category: Category): Promise<void> {
+    const { period, categories } = await this.getSnapshot()
+    if (!period) throw new Error('Set up a budget period before adding categories.')
+    await this.saveBudget(period, [...categories, category])
+  }
   async savePlannedExpense(expense: PlannedExpense): Promise<void> {
     const snapshot = await this.getSnapshot()
     const plannedExpenses = [...snapshot.plannedExpenses.filter(item => item.id !== expense.id), expense]

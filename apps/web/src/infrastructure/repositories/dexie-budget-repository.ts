@@ -9,6 +9,7 @@ import type { AssetOpeningRecord } from './asset-repository'
 import { goldHoldingChanged, matchesCurrentGoldHolding } from './asset-repository'
 import { localToday } from '../../shared/format/date'
 import type { ElectricityRepository } from './electricity-repository'
+import { randomUUID } from '../../shared/format/id'
 
 class BudgetDatabase extends Dexie {
   periods!: Table<BudgetPeriod, string>
@@ -244,7 +245,7 @@ export class DexieBudgetRepository implements BudgetRepository, AssetRepository,
             throw new Error('Choose an active cash, bank, e-wallet, or deposit account for Paid from.')
           }
           nextEntries.push({
-            id: `asset-entry-${crypto.randomUUID()}`,
+            id: `asset-entry-${randomUUID()}`,
             assetId: linkedAssetId,
             date: transaction.date,
             kind: 'DEBIT',

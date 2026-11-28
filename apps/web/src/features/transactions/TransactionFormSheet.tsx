@@ -6,6 +6,7 @@ import { IconButton } from '@astryxdesign/core/IconButton'
 import { Link } from '@astryxdesign/core/Link'
 import { Stack } from '@astryxdesign/core/Stack'
 import type { DateOnly } from '@kinsen/budget-domain'
+import { CategoryIcon } from '../../shared/components/CategoryIcon'
 import { Icon } from '../../shared/components/Icon'
 import { MobileDateField } from '../../shared/components/MobileDateField'
 import { AstryxSelectField, AstryxTextField, CurrencyAmountField } from '../../shared/components/AstryxFields'
@@ -63,6 +64,7 @@ export function TransactionFormSheet(props: TransactionFormProps) {
                     aria-checked={field.value === category.id}
                     className="expense-sheet-chip"
                     onClick={() => field.onChange(category.id)}>
+                    <CategoryIcon icon={category.icon} color={category.color} size={14} />
                     {category.name}
                   </button>
                 ))}

@@ -49,6 +49,16 @@ describe('budget API', () => {
     expect((await request(app).get('/api/budget')).body.snapshot).toEqual(sortedSnapshot(snapshot))
   })
 
+  it('stores a category icon through import and rejects malformed icon keys', async () => {
+    const snapshot = createSampleSnapshot('2026-11-19')
+    snapshot.categories = snapshot.categories.map((category) => category.id === 'food' ? { ...category, icon: 'groceries' } : category)
+    await postWithGeneration('/api/budget/import').send(snapshot).expect(201)
+    const stored = (await request(app).get('/api/budget')).body.snapshot as BudgetSnapshot
+    expect(stored.categories.find((category) => category.id === 'food')?.icon).toBe('groceries')
+    expect(stored.categories.find((category) => category.id === 'transport')).not.toHaveProperty('icon')
+    await postWithGeneration('/api/budget/import').send({ ...snapshot, categories: [{ ...snapshot.categories[0], icon: 'Not Valid!' }, ...snapshot.categories.slice(1)] }).expect(400)
+  })
+
   it('transfers API ownership without changing the budget snapshot', () => {
     const snapshot = createSampleSnapshot('2024-01-02')
     const repository = new SqliteBudgetRepository(database)
@@ -77,6 +87,17 @@ describe('budget API', () => {
     expect(migratedRepository.claimOrVerifyOwner('user_first')).toBe(true)
     expect(migratedRepository.claimOrVerifyOwner('user_second')).toBe(false)
   })
+  it('adds the category icon column to an existing version-three database', () => {
+    const snapshot = createSampleSnapshot('2024-01-02')
+    const repository = new SqliteBudgetRepository(database)
+    repository.importIfEmpty(snapshot)
+    database.exec('ALTER TABLE categories DROP COLUMN icon')
+    database.prepare('DELETE FROM schema_migrations WHERE version >= 4').run()
+    migrateDatabase(database)
+    expect(repository.getSnapshot()).toEqual(sortedSnapshot(snapshot))
+    repository.saveBudget(snapshot.period!, snapshot.categories.map((category) => category.id === 'food' ? { ...category, icon: 'food' } : category))
+    expect(repository.getSnapshot().categories.find((category) => category.id === 'food')?.icon).toBe('food')
+  })
   it('adds the account data generation to an existing version-two database', () => {
     const snapshot = createSampleSnapshot('2024-01-02')
     const repository = new SqliteBudgetRepository(database)
@@ -92,7 +113,7 @@ describe('budget API', () => {
       DROP TABLE app_owner;
       ALTER TABLE app_owner_v2 RENAME TO app_owner;
     `)
-    database.prepare('DELETE FROM schema_migrations WHERE version = 3').run()
+    database.prepare('DELETE FROM schema_migrations WHERE version >= 3').run()
     migrateDatabase(database)
 
     expect(repository.getSnapshot()).toEqual(sortedSnapshot(snapshot))

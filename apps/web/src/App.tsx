@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react'
 import { AppShell } from './shared/components/AppShell'
 import { RouteSkeleton } from './shared/components/RouteSkeleton'
+import { UpdatePrompt } from './shared/components/UpdatePrompt'
 import { disconnectMcpBridge } from './infrastructure/mcp/browser-bridge'
 
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
@@ -165,6 +166,7 @@ function BudgetApplication() {
 export function App() {
   return (
     <>
+      <UpdatePrompt />
       <ClerkLoading><AppSplash /></ClerkLoading>
       <ClerkLoaded>
         <Show when="signed-out"><SignInScreen /></Show>

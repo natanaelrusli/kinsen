@@ -25,6 +25,7 @@ import { calculateGoldValueIdr, createGoldValuation, goldPriceSources, normalize
 import { useAssetStore } from '../../shared/state/asset-store'
 import { formatIdr } from '../../shared/format/money'
 import { goldProductKey, goldProductLabel, valuationOrder } from './GoldValueDetails'
+import { randomUUID } from '../../shared/format/id'
 
 const ASSET_TYPES = ['CASH', 'BANK_ACCOUNT', 'E_WALLET', 'DEPOSIT', 'MUTUAL_FUND', 'STOCK_ETF', 'GOLD', 'FOREIGN_CURRENCY', 'OTHER'] as const satisfies readonly AssetType[]
 const LIABILITY_TYPES = ['CREDIT_CARD', 'PAY_LATER', 'INSTALLMENT', 'LOAN', 'OTHER'] as const satisfies readonly LiabilityType[]
@@ -146,7 +147,7 @@ export function AssetForm({ open, initial, today = localToday(), saving, onClose
         if (!product || goldProductKey(product) !== values.goldProduct) throw new Error('Price unavailable for the selected gold product. Retry gold prices.')
         asset.nativeCurrency = 'IDR'
         asset.createdAt = initial?.createdAt ?? today
-        asset.goldPricing = { source: product.source, materialType: product.materialType, weightGrams: product.weightGrams, lineKey: product.lineKey, units: normalizedUnits, revision: changed ? crypto.randomUUID() : previous!.revision }
+        asset.goldPricing = { source: product.source, materialType: product.materialType, weightGrams: product.weightGrams, lineKey: product.lineKey, units: normalizedUnits, revision: changed ? randomUUID() : previous!.revision }
         if (changed) {
           if (!selectedQuote || selectedQuote.recordedDate > today) throw new Error("Gold price is dated after today's valuation date.")
           const latest = useAssetStore.getState().data.valuations.filter(item => item.assetId === asset.id && item.asOfDate <= today && item.goldQuote && goldProductKey(item.goldQuote) === goldProductKey(selectedQuote)).sort(valuationOrder).at(-1)

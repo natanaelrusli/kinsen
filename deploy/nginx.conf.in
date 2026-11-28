@@ -23,8 +23,8 @@ server {
         try_files $uri =404;
     }
 
-    # The service worker and manifest must always be revalidated.
-    location ~ ^/(sw\.js|workbox-.*\.js|registerSW\.js|manifest\.webmanifest|index\.html)$ {
+    # The service worker, manifest and version stamp must always be revalidated.
+    location ~ ^/(sw\.js|workbox-.*\.js|registerSW\.js|manifest\.webmanifest|version\.json|index\.html)$ {
         add_header Cache-Control "no-cache";
         try_files $uri =404;
     }

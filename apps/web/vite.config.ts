@@ -1,6 +1,21 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import type { Plugin } from 'vite'
+
+// One id per build, shared by the bundle (__APP_BUILD_ID__) and /version.json so
+// a running app can tell when a newer build has been deployed.
+const buildId = Date.now().toString(36)
+
+function versionFile(): Plugin {
+  return {
+    name: 'kinsen-version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) })
+    },
+  }
+}
 
 const apiProxy = {
   '/api': {
@@ -12,10 +27,12 @@ const apiProxy = {
 export default defineConfig({
   envDir: '../..',
   envPrefix: ['VITE_', 'CLERK_PUBLISHABLE_KEY'],
+  define: { __APP_BUILD_ID__: JSON.stringify(buildId) },
   plugins: [
     react(),
+    versionFile(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Kinsen — Daily Budget Planner',
